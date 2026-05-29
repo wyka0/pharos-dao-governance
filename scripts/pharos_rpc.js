@@ -136,30 +136,67 @@ async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
   return results;
 }
 
-async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, toBlock) {
+async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toBlock) {
   const eventTopic = ethers.utils.id("DelegateChanged(address,address,address)");
   const provider = getProvider(network);
   const currentBlock = await provider.getBlockNumber();
-  const MAX_RANGE = 1000;
-  const rawFrom = fromBlock || Math.max(0, currentBlock - MAX_RANGE);
-  const queryFrom = Math.max(rawFrom, currentBlock - MAX_RANGE);
-  const queryTo = toBlock || Math.min(currentBlock, queryFrom + MAX_RANGE);
-  const logs = await provider.getLogs({
-    address: tokenAddress,
-    topics: [eventTopic],
-    fromBlock: queryFrom,
-    toBlock: queryTo,
-  });
+  const RANGE = 1000;
+  const MAX_CHUNKS_FWD = 250;
+  const MAX_CHUNKS_BWD = 50;
   const iface = new ethers.utils.Interface(loadABI("governance_token_abi"));
-  return logs.map((log) => {
-    const parsed = iface.parseLog(log);
-    return {
-      delegator: parsed.args.delegator,
-      fromDelegate: parsed.args.fromDelegate,
-      toDelegate: parsed.args.toDelegate,
-      blockNumber: log.blockNumber,
-    };
-  });
+  const results = [];
+
+  if (fromBlock !== undefined) {
+    const endAt = _toBlock !== undefined ? _toBlock : currentBlock;
+    let cursor = Math.max(0, fromBlock);
+    let chunks = 0;
+    while (cursor < endAt && chunks < MAX_CHUNKS_FWD) {
+      const chunkEnd = Math.min(endAt, cursor + RANGE);
+      try {
+        const logs = await provider.getLogs({
+          address: tokenAddress, topics: [eventTopic],
+          fromBlock: cursor, toBlock: chunkEnd,
+        });
+        for (const log of logs) {
+          const parsed = iface.parseLog(log);
+          results.push({
+            delegator: parsed.args.delegator,
+            fromDelegate: parsed.args.fromDelegate,
+            toDelegate: parsed.args.toDelegate,
+            blockNumber: log.blockNumber,
+          });
+        }
+      } catch (_) { break; }
+      cursor = chunkEnd + 1;
+      chunks++;
+    }
+  } else {
+    let endBlock = currentBlock;
+    let chunks = 0;
+    while (endBlock > 0 && chunks < MAX_CHUNKS_BWD) {
+      const startBlock = Math.max(0, endBlock - RANGE + 1);
+      try {
+        const logs = await provider.getLogs({
+          address: tokenAddress, topics: [eventTopic],
+          fromBlock: startBlock, toBlock: endBlock,
+        });
+        for (const log of logs) {
+          const parsed = iface.parseLog(log);
+          results.push({
+            delegator: parsed.args.delegator,
+            fromDelegate: parsed.args.fromDelegate,
+            toDelegate: parsed.args.toDelegate,
+            blockNumber: log.blockNumber,
+          });
+        }
+        if (logs.length > 0) break;
+      } catch (_) { break; }
+      endBlock = startBlock - 1;
+      chunks++;
+    }
+  }
+
+  return results;
 }
 
 module.exports = {

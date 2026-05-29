@@ -22,56 +22,58 @@ async function governanceRiskReport(governorAddress, network = "atlantic-testnet
   const findings = [];
   let riskScore = 0;
 
+  // Fetch all data in parallel
+  const [delegateData, health, activity60, activity30, activity90] = await Promise.allSettled([
+    delegateInsights(governorAddress, network),
+    governanceHealth(governorAddress, network),
+    governanceActivity(governorAddress, network, 60),
+    governanceActivity(governorAddress, network, 30),
+    governanceActivity(governorAddress, network, 90),
+  ]);
+
+  const dd = delegateData.status === "fulfilled" ? delegateData.value : null;
+  const h = health.status === "fulfilled" ? health.value : null;
+  const a60 = activity60.status === "fulfilled" ? activity60.value : null;
+  const a30 = activity30.status === "fulfilled" ? activity30.value : null;
+  const a90 = activity90.status === "fulfilled" ? activity90.value : null;
+
   // --- 1. Delegation concentration ---
-  let delegateData;
-  try {
-    delegateData = await delegateInsights(governorAddress, network);
-    if (!delegateData.error) {
-      const top3 = parseFloat(delegateData.metrics.top3Share);
-      const top1 = parseFloat(delegateData.metrics.top1Share);
-      if (top3 >= 66) {
-        findings.push({ severity: "high", category: "Centralization", detail: `Top 3 delegates control ${top3}% of voting power — governance can be captured by a small group.` });
-        riskScore += 25;
-      } else if (top3 >= 50) {
-        findings.push({ severity: "medium", category: "Centralization", detail: `Top 3 delegates control ${top3}% of voting power. Moderate concentration risk.` });
-        riskScore += 15;
-      } else {
-        findings.push({ severity: "low", category: "Centralization", detail: `Top 3 delegates control ${top3}% — power is reasonably distributed.` });
-      }
-      if (top1 >= 50) {
-        findings.push({ severity: "critical", category: "Single-Point Control", detail: `单一地址控制 ${top1}% 的投票权。治理由单一实体主导。` });
-        riskScore += 30;
-      }
+  if (dd && !dd.error) {
+    const top3 = parseFloat(dd.metrics.top3Share);
+    const top1 = parseFloat(dd.metrics.top1Share);
+    if (top3 >= 66) {
+      findings.push({ severity: "high", category: "Centralization", detail: `Top 3 delegates control ${top3}% of voting power — governance can be captured by a small group.` });
+      riskScore += 25;
+    } else if (top3 >= 50) {
+      findings.push({ severity: "medium", category: "Centralization", detail: `Top 3 delegates control ${top3}% of voting power. Moderate concentration risk.` });
+      riskScore += 15;
+    } else {
+      findings.push({ severity: "low", category: "Centralization", detail: `Top 3 delegates control ${top3}% — power is reasonably distributed.` });
     }
-  } catch (_) {
+    if (top1 >= 50) {
+      findings.push({ severity: "critical", category: "Single-Point Control", detail: `Single address controls ${top1}% of voting power. Governance dominated by one entity.` });
+      riskScore += 30;
+    }
+  } else {
     findings.push({ severity: "medium", category: "Data Gap", detail: "Could not analyze delegate concentration. Token may not support delegation." });
     riskScore += 10;
   }
 
-  // --- 2. Participation trend (via activity feed) ---
-  try {
-    const activity = await governanceActivity(governorAddress, network, 60);
-    const recent = await governanceActivity(governorAddress, network, 30);
-    if (activity.summary.totalProposals > 0 && recent.summary.totalProposals > 0) {
-      const olderPeriodRate = activity.summary.totalProposals > 0
-        ? ((activity.summary.passed + activity.summary.failed) / activity.summary.totalProposals) * 100 : 0;
-      const recentRate = recent.summary.totalProposals > 0
-        ? ((recent.summary.passed + recent.summary.failed) / recent.summary.totalProposals) * 100 : 0;
-
-      if (recentRate < olderPeriodRate * 0.8 && olderPeriodRate > 0) {
-        const decline = ((olderPeriodRate - recentRate) / olderPeriodRate * 100).toFixed(0);
-        findings.push({ severity: "medium", category: "Declining Participation", detail: `Voter participation declined ~${decline}% in the last 30 days compared to the prior period.` });
-        riskScore += 15;
-      } else {
-        findings.push({ severity: "low", category: "Participation", detail: "Voter participation is stable or growing. No decline detected." });
-      }
+  // --- 2. Participation trend ---
+  if (a60 && a30 && a60.summary.totalProposals > 0 && a30.summary.totalProposals > 0) {
+    const olderRate = ((a60.summary.passed + a60.summary.failed) / a60.summary.totalProposals) * 100;
+    const recentRate = ((a30.summary.passed + a30.summary.failed) / a30.summary.totalProposals) * 100;
+    if (recentRate < olderRate * 0.8 && olderRate > 0) {
+      findings.push({ severity: "medium", category: "Declining Participation", detail: `Voter participation declined ~${((olderRate - recentRate) / olderRate * 100).toFixed(0)}% in the last 30 days compared to the prior period.` });
+      riskScore += 15;
+    } else {
+      findings.push({ severity: "low", category: "Participation", detail: "Voter participation is stable or growing. No decline detected." });
     }
-  } catch (_) {}
+  }
 
   // --- 3. Quorum health ---
-  try {
-    const health = await governanceHealth(governorAddress, network);
-    const quorumRate = parseFloat(health.rates.quorumSuccessRate);
+  if (h) {
+    const quorumRate = parseFloat(h.rates.quorumSuccessRate);
     if (quorumRate < 60) {
       findings.push({ severity: "high", category: "Quorum Risk", detail: `Quorum reached in only ${quorumRate}% of recent proposals. Proposals risk failing due to low turnout.` });
       riskScore += 20;
@@ -81,31 +83,26 @@ async function governanceRiskReport(governorAddress, network = "atlantic-testnet
     } else {
       findings.push({ severity: "low", category: "Quorum", detail: `Quorum consistently met (${quorumRate}% success rate). Healthy voter turnout.` });
     }
-  } catch (_) {}
+  }
 
-  // --- 4. Delegate rotation (stagnation detection) ---
-  try {
-    const tokenAddr = pharos.getGovernorContract(governorAddress, network).token;
-    // This is complex without historical snapshots — use Nakamoto coefficient as proxy
-    if (delegateData && !delegateData.error) {
-      const nakamoto = delegateData.nakamotoCoefficient;
-      if (nakamoto <= 2) {
-        findings.push({ severity: "high", category: "Delegate Stagnation", detail: `Only ${nakamoto} delegates needed for majority (Nakamoto coefficient = ${nakamoto}). No rotation pressure.` });
-        riskScore += 15;
-      } else if (nakamoto >= 10) {
-        findings.push({ severity: "low", category: "Delegate Diversity", detail: `Nakamoto coefficient is ${nakamoto} — power is distributed across many delegates.` });
-      } else {
-        findings.push({ severity: "low", category: "Delegate Distribution", detail: `Nakamoto coefficient is ${nakamoto}. Moderate delegate diversity.` });
-      }
+  // --- 4. Delegate stagnation ---
+  if (dd && !dd.error) {
+    const nakamoto = dd.nakamotoCoefficient;
+    if (nakamoto <= 2) {
+      findings.push({ severity: "high", category: "Delegate Stagnation", detail: `Only ${nakamoto} delegates needed for majority (Nakamoto coefficient = ${nakamoto}). No rotation pressure.` });
+      riskScore += 15;
+    } else if (nakamoto >= 10) {
+      findings.push({ severity: "low", category: "Delegate Diversity", detail: `Nakamoto coefficient is ${nakamoto} — power is distributed across many delegates.` });
+    } else {
+      findings.push({ severity: "low", category: "Delegate Distribution", detail: `Nakamoto coefficient is ${nakamoto}. Moderate delegate diversity.` });
     }
-  } catch (_) {}
+  }
 
   // --- 5. Proposal success rate ---
-  try {
-    const activity30 = await governanceActivity(governorAddress, network, 90);
-    const total = activity30.summary.passed + activity30.summary.failed;
+  if (a90) {
+    const total = a90.summary.passed + a90.summary.failed;
     if (total > 0) {
-      const passRate = (activity30.summary.passed / total) * 100;
+      const passRate = (a90.summary.passed / total) * 100;
       if (passRate < 50) {
         findings.push({ severity: "high", category: "Proposal Success", detail: `Only ${passRate.toFixed(0)}% of proposals pass. Governance may be fragmented or contentious.` });
         riskScore += 15;
@@ -115,17 +112,16 @@ async function governanceRiskReport(governorAddress, network = "atlantic-testnet
         findings.push({ severity: "low", category: "Proposal Success", detail: `${passRate.toFixed(0)}% pass rate. Normal governance operation.` });
       }
     }
-  } catch (_) {}
+  }
 
-  // --- 6. Active proposal health check (latest proposal) ---
+  // --- 6. Active proposal health check ---
   try {
     let latestId;
     try {
-      const count = await pharos.getGovernorContract(governorAddress, network).proposalCount();
+      const gov = pharos.getGovernorContract(governorAddress, network);
+      const count = await gov.proposalCount();
       latestId = count.toNumber() - 1;
-    } catch (_) {
-      // silent — not a critical path
-    }
+    } catch (_) {}
     if (latestId !== undefined && latestId >= 0) {
       const detail = await proposalDetails(governorAddress, latestId, network);
       if (detail.state === "Active" && Number(detail.againstVotes) > Number(detail.forVotes) * 1.5) {
