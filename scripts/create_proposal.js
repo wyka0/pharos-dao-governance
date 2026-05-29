@@ -25,7 +25,7 @@ async function createProposal(governorAddress, targets, values, calldatas, descr
   if (Number(power) < Number(threshold)) {
     return {
       skipped: true,
-      message: `Insufficient voting power. Have ${power}, need ${threshold}`,
+      message: `Insufficient voting power. Have ${pharos.formatRawVotes(power)}, need ${pharos.formatRawVotes(threshold)}`,
       proposer,
       power,
       threshold,

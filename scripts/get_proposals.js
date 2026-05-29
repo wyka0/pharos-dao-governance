@@ -111,7 +111,7 @@ if (require.main === module) {
       const pct = sum ? ((Number(p.forVotes || 0) / sum) * 100).toFixed(1) : "?";
       const desc = p.description || "(no description available)";
       const stateTag = p.state || "?";
-      const forTag = p.forVotes || "?";
+      const forTag = p.forVotes ? pharos.formatRawVotes(p.forVotes) : "?";
       const shortId = p.id.length > 16 ? p.id.slice(0, 16) + "..." : p.id;
       console.log(`  #${shortId.padEnd(20)} ${stateTag.padEnd(12)} ${forTag.padStart(12)} For  ${pct}%`);
       console.log(`        ${desc}`);

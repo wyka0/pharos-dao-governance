@@ -50,22 +50,26 @@ async function governanceHealth(governorAddress, network = "atlantic-testnet") {
   try { votingPeriod = (await gov.votingPeriod()).toNumber(); } catch (_) {}
   try { proposalThreshold = (await gov.proposalThreshold()).toString(); } catch (_) {}
 
-  let quorumVal = 0;
+  let quorumVal = 0, quorumRaw = "0";
   try {
     const currentBlock = await provider.getBlockNumber();
-    quorumVal = Number(await gov.quorum(currentBlock));
+    const qBN = await gov.quorum(currentBlock);
+    quorumVal = Number(qBN);
+    quorumRaw = qBN.toString();
   } catch (_) {}
 
   // 3. Token / delegation info
   let tokenAddr;
   try { tokenAddr = await gov.token(); } catch (_) { tokenAddr = null; }
 
-  let totalSupply = 0, tokenSymbol = "VOTE";
+  let totalSupply = 0, totalSupplyRaw = "0", tokenSymbol = "VOTE";
   if (tokenAddr) {
     try {
       const t = pharos.getGovernanceTokenContract(tokenAddr, network);
       tokenSymbol = await t.symbol();
-      totalSupply = Number(await t.totalSupply());
+      const tsBN = await t.totalSupply();
+      totalSupply = Number(tsBN);
+      totalSupplyRaw = tsBN.toString();
     } catch (_) {}
   }
 
@@ -124,11 +128,11 @@ async function governanceHealth(governorAddress, network = "atlantic-testnet") {
     },
     config: {
       tokenSymbol,
-      totalSupply: totalSupply.toString(),
+      totalSupply: totalSupplyRaw,
       votingDelay,
       votingPeriod,
       proposalThreshold,
-      quorum: quorumVal.toString(),
+      quorum: quorumRaw,
       governanceToken: tokenAddr || "N/A",
     },
     network,
@@ -171,11 +175,12 @@ if (require.main === module) {
     console.log(`  Voter Participation:${pct(d.rates.voterParticipationRate).padStart(6)}  ${bar(parseFloat(d.rates.voterParticipationRate))}\n`);
 
     console.log(`⚙️  Config`);
+    const fmt = (v) => pharos.formatRawVotes(v);
     console.log(`  Token: ${d.config.tokenSymbol} (${d.config.governanceToken})`);
-    console.log(`  Total Supply: ${d.config.totalSupply}`);
-    console.log(`  Quorum: ${d.config.quorum}`);
-    console.log(`  Voting Period: ${d.config.votingPeriod} blocks`);
-    console.log(`  Proposal Threshold: ${d.config.proposalThreshold}`);
+    console.log(`  Total Supply: ${fmt(d.config.totalSupply)} ${d.config.tokenSymbol}`);
+    console.log(`  Quorum: ${fmt(d.config.quorum)} ${d.config.tokenSymbol}`);
+    console.log(`  Voting Period: ${d.config.votingPeriod.toLocaleString()} blocks`);
+    console.log(`  Proposal Threshold: ${fmt(d.config.proposalThreshold)} ${d.config.tokenSymbol}`);
   }).catch(console.error);
 }
 

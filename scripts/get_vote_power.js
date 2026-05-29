@@ -89,7 +89,7 @@ if (require.main === module) {
     console.log(`\n🔋 Voting Power`);
     console.log(`Voter:  ${d.voter}`);
     console.log(`Token:  ${d.tokenSymbol} (${d.governanceToken})`);
-    console.log(`Power:  ${d.votingPower}`);
+    console.log(`Power:  ${pharos.formatRawVotes(d.votingPower)} ${d.tokenSymbol || "VOTE"}`);
     if (d.isSelfDelegated) {
       console.log(`Status: Self-delegated ✅`);
     } else if (d.isDelegated) {
@@ -97,7 +97,7 @@ if (require.main === module) {
     } else {
       console.log(`Status: Not delegated ⚠️  (use delegate script to activate voting power)`);
     }
-    console.log(`Total Supply: ${d.totalSupply}`);
+    console.log(`Total Supply: ${pharos.formatRawVotes(d.totalSupply)} ${d.tokenSymbol || "VOTE"}`);
     console.log(`\nActive Proposals: ${d.activeProposals.length ? d.activeProposals.join(", ") : "none"}`);
     console.log(`Network: ${d.network}`);
   }).catch(console.error);

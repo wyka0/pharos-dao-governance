@@ -11,7 +11,8 @@ async function getResults(governorAddress, proposalId, network = "atlantic-testn
 
   const votes = await gov.proposalVotes(proposalId);
   const stateCode = await gov.state(proposalId);
-  const total = Number(votes.forVotes) + Number(votes.againstVotes) + Number(votes.abstainVotes);
+  const totalBN = votes.forVotes.add(votes.againstVotes).add(votes.abstainVotes);
+  const total = Number(totalBN);
   const pct = (v) => total ? ((Number(v) / total) * 100).toFixed(1) : "0.0";
 
   let currentBlock;
@@ -58,7 +59,7 @@ async function getResults(governorAddress, proposalId, network = "atlantic-testn
     forVotes: votes.forVotes.toString(),
     againstVotes: votes.againstVotes.toString(),
     abstainVotes: votes.abstainVotes.toString(),
-    totalVotes: String(total),
+    totalVotes: totalBN.toString(),
     forPct: pct(votes.forVotes),
     againstPct: pct(votes.againstVotes),
     abstainPct: pct(votes.abstainVotes),
@@ -90,17 +91,17 @@ if (require.main === module) {
     console.log(`State: ${d.state}`);
     if (d.description) console.log(`\n${d.description}`);
 
-    console.log(`\n  ✅ For:      ${d.forVotes.padStart(16)}  (${d.forPct}%)`);
-    console.log(`  ❌ Against:  ${d.againstVotes.padStart(16)}  (${d.againstPct}%)`);
-    console.log(`  ⬜ Abstain:  ${d.abstainVotes.padStart(16)}  (${d.abstainPct}%)`);
+    console.log(`\n  ✅ For:      ${String(pharos.formatRawVotes(d.forVotes)).padStart(16)}  (${d.forPct}%)`);
+    console.log(`  ❌ Against:  ${String(pharos.formatRawVotes(d.againstVotes)).padStart(16)}  (${d.againstPct}%)`);
+    console.log(`  ⬜ Abstain:  ${String(pharos.formatRawVotes(d.abstainVotes)).padStart(16)}  (${d.abstainPct}%)`);
     console.log(`  ─────────────────────────────────────`);
-    console.log(`  Total:       ${d.totalVotes.padStart(16)}`);
-    console.log(`  Quorum:      ${d.quorum.padStart(16)}  (${d.quorumPct}% filled) ${d.quorumMet ? "✅" : "❌"}`);
+    console.log(`  Total:       ${String(pharos.formatRawVotes(d.totalVotes)).padStart(16)}`);
+    console.log(`  Quorum:      ${String(pharos.formatRawVotes(d.quorum)).padStart(16)}  (${d.quorumPct}% filled) ${d.quorumMet ? "✅" : "❌"}`);
 
     if (d.votingEnded) {
       console.log(`\n  ⏰ Voting has ended.`);
     } else {
-      console.log(`\n  ⏳ ${d.blocksRemaining} blocks remaining (current: ${d.currentBlock}, deadline: ${d.deadlineBlock})`);
+      console.log(`\n  ⏳ ${d.blocksRemaining.toLocaleString()} blocks remaining (current: ${d.currentBlock.toLocaleString()}, deadline: ${d.deadlineBlock.toLocaleString()})`);
     }
   }).catch(console.error);
 }

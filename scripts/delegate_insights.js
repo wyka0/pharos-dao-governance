@@ -8,7 +8,7 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
   const provider = pharos.getProvider(network);
 
   // Discover governance token
-  let tokenAddr, tokenSymbol = "VOTE", totalSupply = 0;
+  let tokenAddr, tokenSymbol = "VOTE", totalSupply = 0, totalSupplyRaw = "0";
   try {
     tokenAddr = await gov.token();
     if (!tokenAddr || tokenAddr === ethers.constants.AddressZero) {
@@ -16,7 +16,9 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
     }
     const t = pharos.getGovernanceTokenContract(tokenAddr, network);
     tokenSymbol = await t.symbol();
-    totalSupply = Number(await t.totalSupply());
+    const tsBN = await t.totalSupply();
+    totalSupply = Number(tsBN);
+    totalSupplyRaw = tsBN.toString();
   } catch (_) {
     return { error: "Could not discover governance token. Governor may not implement token().", network, governor: governorAddress };
   }
@@ -49,13 +51,17 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
 
   // Query voting power for each delegate
   const delegatePower = [];
+  let totalVotingPowerBN = ethers.BigNumber.from(0);
   for (const addr of allDelegates) {
     try {
-      const power = Number(await govToken.getVotes(addr));
+      const powerBN = await govToken.getVotes(addr);
+      const power = Number(powerBN);
       if (power > 0) {
+        totalVotingPowerBN = totalVotingPowerBN.add(powerBN);
         delegatePower.push({
           address: addr,
           votingPower: power,
+          votingPowerRaw: powerBN.toString(),
           percentage: totalSupply > 0 ? (power / totalSupply) * 100 : 0,
         });
       }
@@ -66,7 +72,7 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
   delegatePower.sort((a, b) => b.votingPower - a.votingPower);
 
   // Calculate concentration metrics
-  const totalVotingPower = delegatePower.reduce((s, d) => s + d.votingPower, 0);
+  const totalVotingPower = Number(totalVotingPowerBN);
   const top1 = delegatePower[0]?.percentage || 0;
   const top3 = delegatePower.slice(0, 3).reduce((s, d) => s + d.percentage, 0);
   const top5 = delegatePower.slice(0, 5).reduce((s, d) => s + d.percentage, 0);
@@ -103,9 +109,9 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
   return {
     tokenAddress: tokenAddr,
     tokenSymbol,
-    totalSupply: totalSupply.toLocaleString(),
+    totalSupply: totalSupplyRaw,
     totalDelegates: delegatePower.length,
-    totalVotingPower: totalVotingPower.toLocaleString(),
+    totalVotingPower: totalVotingPowerBN.toString(),
     topDelegates: delegatePower.slice(0, 15),
     concentration,
     concentrationColor,
@@ -147,8 +153,8 @@ if (require.main === module) {
     console.log(`Token:   ${d.tokenSymbol} (${d.tokenAddress})\n`);
 
     console.log(`📊 Overview`);
-    console.log(`  Total Supply:       ${d.totalSupply} ${d.tokenSymbol}`);
-    console.log(`  Total Voting Power: ${d.totalVotingPower} ${d.tokenSymbol}`);
+    console.log(`  Total Supply:       ${pharos.formatRawVotes(d.totalSupply)} ${d.tokenSymbol}`);
+    console.log(`  Total Voting Power: ${pharos.formatRawVotes(d.totalVotingPower)} ${d.tokenSymbol}`);
     console.log(`  Total Delegates:    ${d.totalDelegates}`);
     console.log(`  Nakamoto Coeff.:    ${d.nakamotoCoefficient} delegates to reach 51%\n`);
 

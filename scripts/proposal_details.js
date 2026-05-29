@@ -34,7 +34,8 @@ async function proposalDetails(governorAddress, proposalId, network = "atlantic-
     try { endBlock = (await gov.proposalDeadline(proposalId)).toString(); } catch (_) { endBlock = "0"; }
   }
 
-  const total = Number(votes.forVotes) + Number(votes.againstVotes) + Number(votes.abstainVotes);
+  const totalBN = votes.forVotes.add(votes.againstVotes).add(votes.abstainVotes);
+  const total = Number(totalBN);
   const pct = (v) => total ? ((Number(v) / total) * 100).toFixed(1) : "0.0";
 
   // Try to get description from ProposalCreated events
@@ -61,7 +62,7 @@ async function proposalDetails(governorAddress, proposalId, network = "atlantic-
     forVotes: votes.forVotes.toString(),
     againstVotes: votes.againstVotes.toString(),
     abstainVotes: votes.abstainVotes.toString(),
-    totalVotes: String(total),
+    totalVotes: totalBN.toString(),
     forPct: pct(votes.forVotes),
     againstPct: pct(votes.againstVotes),
     abstainPct: pct(votes.abstainVotes),
@@ -93,11 +94,11 @@ if (require.main === module) {
     console.log(`Proposer: ${d.proposer}`);
     console.log(`Voting: Block ${d.startBlock} -> ${d.endBlock}`);
     console.log(`\nVote Tally:`);
-    console.log(`  FOR:      ${d.forVotes.padStart(16)}  (${d.forPct}%)`);
-    console.log(`  AGAINST:  ${d.againstVotes.padStart(16)}  (${d.againstPct}%)`);
-    console.log(`  ABSTAIN:  ${d.abstainVotes.padStart(16)}  (${d.abstainPct}%)`);
-    console.log(`  TOTAL:    ${d.totalVotes.padStart(16)}`);
-    console.log(`  QUORUM:   ${d.quorum.padStart(16)}  ${d.quorumMet ? "Met" : "Not met"}`);
+    console.log(`  FOR:      ${String(pharos.formatRawVotes(d.forVotes)).padStart(16)}  (${d.forPct}%)`);
+    console.log(`  AGAINST:  ${String(pharos.formatRawVotes(d.againstVotes)).padStart(16)}  (${d.againstPct}%)`);
+    console.log(`  ABSTAIN:  ${String(pharos.formatRawVotes(d.abstainVotes)).padStart(16)}  (${d.abstainPct}%)`);
+    console.log(`  TOTAL:    ${String(pharos.formatRawVotes(d.totalVotes)).padStart(16)}`);
+    console.log(`  QUORUM:   ${String(pharos.formatRawVotes(d.quorum)).padStart(16)}  ${d.quorumMet ? "Met" : "Not met"}`);
     if (d.governanceToken) console.log(`\nToken: ${d.governanceToken}`);
     console.log(`\nGovernor: ${pharos.explorerAddress(addr, d.network)}`);
   }).catch(console.error);

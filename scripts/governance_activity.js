@@ -124,7 +124,7 @@ if (require.main === module) {
       for (const p of d.proposals) {
         const age = d.toBlock - Number(p.createdBlock);
         const ageDays = (age / 7200).toFixed(1);
-        console.log(`  #${String(p.id).padEnd(6)} ${p.state.padEnd(12)} ${p.forVotes.padStart(10)} For  ${p.againstVotes.padStart(10)} Against  (${ageDays}d ago)`);
+        console.log(`  #${String(p.id).padEnd(6)} ${p.state.padEnd(12)} ${pharos.formatRawVotes(p.forVotes).padStart(12)} For  ${pharos.formatRawVotes(p.againstVotes).padStart(12)} Against  (${ageDays}d ago)`);
         console.log(`        ${p.description}`);
         console.log();
       }

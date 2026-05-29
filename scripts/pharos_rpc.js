@@ -208,6 +208,25 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
   return results;
 }
 
+function formatTokenAmount(amount, decimals = 18) {
+  const divisor = ethers.BigNumber.from(10).pow(decimals);
+  const quotient = amount.div(divisor);
+  const remainder = amount.mod(divisor);
+  const remainderStr = remainder.toString().padStart(decimals, "0").slice(0, 4);
+  const intPart = quotient.toNumber().toLocaleString("en-US");
+  const trimmed = remainderStr.replace(/0+$/, "");
+  return trimmed ? `${intPart}.${trimmed}` : intPart;
+}
+
+function formatTokenDisplay(amount, symbol, decimals = 18) {
+  return `${formatTokenAmount(amount, decimals)} ${symbol}`;
+}
+
+function formatRawVotes(amountStr, symbol = "", decimals = 18) {
+  const amount = ethers.BigNumber.from(amountStr);
+  return symbol ? formatTokenDisplay(amount, symbol, decimals) : formatTokenAmount(amount, decimals);
+}
+
 module.exports = {
   getNetwork,
   getProvider,
@@ -221,4 +240,7 @@ module.exports = {
   explorerAddress,
   queryProposalCreatedEvents,
   queryDelegateChangedEvents,
+  formatTokenAmount,
+  formatTokenDisplay,
+  formatRawVotes,
 };

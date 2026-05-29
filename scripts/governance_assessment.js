@@ -53,8 +53,8 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
     try { deadlineBlock = Number(await gov.proposalDeadline(proposalId)); } catch (_) {}
   }
 
-  let quorumVal = 0;
-  try { quorumVal = Number(await gov.quorum(startBlock || 0)); } catch (_) {}
+  let quorumVal = 0, quorumRaw = "0";
+  try { quorumRaw = (await gov.quorum(startBlock || 0)).toString(); quorumVal = Number(quorumRaw); } catch (_) {}
 
   let tokenAddr, tokenSymbol = "VOTE", totalSupply = 0;
   try {
@@ -83,6 +83,7 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
 
   // Vote margin
   const margin = fVotes - aVotes;
+  const marginBN = votes.forVotes.sub(votes.againstVotes);
   const totalExAbstain = fVotes + aVotes;
   const forPct = totalExAbstain > 0 ? (fVotes / totalExAbstain) * 100 : 0;
 
@@ -142,12 +143,13 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
       reasoning.push(`⚡ Risk factor flagged: ${category}. Higher scrutiny may be warranted.`);
     }
 
+    const marginDisplay = pharos.formatRawVotes(marginBN.abs().toString(), tokenSymbol);
     if (margin > 0 && quorumMet) {
-      reasoning.push(`✅ Quorum met. For votes lead by ${margin.toLocaleString()} ${tokenSymbol}.`);
+      reasoning.push(`✅ Quorum met. For votes lead by ${marginDisplay}.`);
     } else if (margin > 0) {
-      reasoning.push(`📊 For votes lead by ${margin.toLocaleString()} ${tokenSymbol}, but quorum not yet met at ${quorumProb.toFixed(0)}%.`);
+      reasoning.push(`📊 For votes lead by ${marginDisplay}, but quorum not yet met at ${quorumProb.toFixed(0)}%.`);
     } else if (fVotes > 0) {
-      reasoning.push(`Against votes lead by ${Math.abs(margin).toLocaleString()} ${tokenSymbol}.`);
+      reasoning.push(`Against votes lead by ${marginDisplay}.`);
     }
 
     if (blocksRemaining > 0 && isActive) {
@@ -174,23 +176,24 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
     category,
     risk,
     metrics: {
-      forVotes: fVotes.toLocaleString(),
-      againstVotes: aVotes.toLocaleString(),
-      abstainVotes: abVotes.toLocaleString(),
-      totalVotes: totalVotes.toLocaleString(),
+      forVotes: votes.forVotes.toString(),
+      againstVotes: votes.againstVotes.toString(),
+      abstainVotes: votes.abstainVotes.toString(),
+      totalVotes: votes.forVotes.add(votes.againstVotes).add(votes.abstainVotes).toString(),
       forPercentage: forPct.toFixed(1),
-      margin: margin.toLocaleString(),
-      quorum: quorumVal.toLocaleString(),
+      margin: votes.forVotes.sub(votes.againstVotes).abs().toString(),
+      quorum: quorumRaw,
       quorumProgress: quorumProb.toFixed(0),
       quorumMet,
       participationRate: participationRate.toFixed(1),
-      blocksRemaining: Math.max(0, blocksRemaining).toLocaleString(),
+      blocksRemaining: Math.max(0, blocksRemaining),
       quorumAlert: isActive && !quorumMet && blocksRemaining > 0 && blocksRemaining < QUORUM_ALERT_BLOCKS,
     },
     assessment,
     confidence,
     confidenceScore,
     reasoning,
+    tokenSymbol,
     network,
   };
 }
@@ -211,7 +214,10 @@ if (require.main === module) {
       return "█".repeat(filled) + "░".repeat(w - filled);
     };
 
-    console.log(`\n🤖 AI Governance Recommendation`);
+    const fmt = (v) => pharos.formatRawVotes(v);
+    const sym = d.tokenSymbol || "VOTE";
+
+    console.log(`\n🤖 AI Governance Assessment`);
     console.log(`Network: ${d.network}\n`);
 
     console.log(`Proposal #${d.proposalId}`);
@@ -220,20 +226,20 @@ if (require.main === module) {
     console.log(`Category: ${d.category}  |  Risk: ${d.risk}\n`);
 
     console.log(`📊 Vote Analysis`);
-    console.log(`  ✅ For:     ${d.metrics.forVotes.padStart(14)}  ${bar(d.metrics.forPercentage)} ${d.metrics.forPercentage}%`);
-    console.log(`  ❌ Against: ${d.metrics.againstVotes.padStart(14)}  ${bar(100 - parseFloat(d.metrics.forPercentage))} ${(100 - parseFloat(d.metrics.forPercentage)).toFixed(1)}%`);
-    console.log(`  ⬜ Abstain: ${d.metrics.abstainVotes.padStart(14)}`);
+    console.log(`  ✅ For:     ${`${fmt(d.metrics.forVotes)} ${sym}`.padStart(20)}  ${bar(d.metrics.forPercentage)} ${d.metrics.forPercentage}%`);
+    console.log(`  ❌ Against: ${`${fmt(d.metrics.againstVotes)} ${sym}`.padStart(20)}  ${bar(100 - parseFloat(d.metrics.forPercentage))} ${(100 - parseFloat(d.metrics.forPercentage)).toFixed(1)}%`);
+    console.log(`  ⬜ Abstain: ${`${fmt(d.metrics.abstainVotes)} ${sym}`.padStart(20)}`);
     console.log(`  ─────────────────────────────────────────────`);
-    console.log(`  Total:     ${d.metrics.totalVotes.padStart(14)}`);
-    console.log(`  Margin:    ${d.metrics.margin.padStart(14)}`);
+    console.log(`  Total:     ${`${fmt(d.metrics.totalVotes)} ${sym}`.padStart(20)}`);
+    console.log(`  Margin:    ${`${fmt(d.metrics.margin)} ${sym}`.padStart(20)}`);
     console.log(`  Turnout:   ${d.metrics.participationRate.padStart(11)}%  ${bar(d.metrics.participationRate)}\n`);
 
     console.log(`🎯 Quorum`);
-    console.log(`  Required:    ${d.metrics.quorum.padStart(12)}`);
+    console.log(`  Required:    ${`${fmt(d.metrics.quorum)} ${sym}`.padStart(16)}`);
     console.log(`  Progress:    ${d.metrics.quorumProgress.padStart(7)}%  ${bar(d.metrics.quorumProgress)}`);
     console.log(`  Status:      ${d.metrics.quorumMet ? "✅ Met" : "❌ Not yet met"}`);
     if (d.metrics.blocksRemaining > 0) {
-      console.log(`  ⏳ ${d.metrics.blocksRemaining} blocks remaining`);
+      console.log(`  ⏳ ${(d.metrics.blocksRemaining).toLocaleString()} blocks remaining`);
     }
 
     console.log(`\n🔮 AI Assessment: ${d.assessment}  (confidence: ${d.confidence} · ${d.confidenceScore}/100)`);
@@ -274,11 +280,13 @@ async function quorumAlertCheck(governorAddress, network = "atlantic-testnet") {
       if (forVotes >= quorumVal) continue;
       if (blocksLeft <= 0 || blocksLeft > QUORUM_ALERT_BLOCKS) continue;
 
+      const forVotesRaw = votes.forVotes.toString();
+      const quorumRaw = (await gov.quorum(Number(ev.voteStart) || 0)).toString();
       alerts.push({
         proposalId: ev.proposalId.toString(),
         description: ev.description.slice(0, 120),
-        forVotes: forVotes.toLocaleString(),
-        quorumRequired: quorumVal.toLocaleString(),
+        forVotes: pharos.formatRawVotes(forVotesRaw),
+        quorumRequired: pharos.formatRawVotes(quorumRaw),
         quorumProgress: ((forVotes / quorumVal) * 100).toFixed(0),
         blocksRemaining: blocksLeft.toLocaleString(),
       });
