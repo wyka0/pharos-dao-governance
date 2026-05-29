@@ -1,0 +1,23 @@
+{
+  "name": "pharos-dao-governance-skill",
+  "version": "3.0.0",
+  "description": "Full lifecycle DAO Governance Skill for Pharos Agent Center — create, vote, delegate, health check, AI recommendations",
+  "scripts": {
+    "activity": "node scripts/governance_activity.js",
+    "assessment": "node scripts/governance_assessment.js",
+    "create": "node scripts/create_proposal.js",
+    "delegate": "node scripts/delegate_votes.js",
+    "delegates": "node scripts/delegate_insights.js",
+    "details": "node scripts/proposal_details.js",
+    "health": "node scripts/governance_health.js",
+    "power": "node scripts/get_vote_power.js",
+    "proposals": "node scripts/get_proposals.js",
+    "results": "node scripts/get_results.js",
+    "risk": "node scripts/governance_risk_report.js",
+    "vote": "node scripts/cast_vote.js"
+  },
+  "dependencies": {
+    "ethers": "^5.7.2",
+    "dotenv": "^16.4.5"
+  }
+}

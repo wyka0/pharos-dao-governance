@@ -1,0 +1,9 @@
+node_modules/
+.env
+.env.real
+*.log
+.DS_Store
+contracts/out/
+contracts/cache/
+contracts/lib/
+wallets.txt

@@ -1,0 +1,15 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.28"
+evm_version = "cancun"
+optimizer = true
+optimizer_runs = 200
+
+[rpc_endpoints]
+atlantic-testnet = "https://atlantic.dplabs-internal.com"
+mainnet = "https://rpc.pharos.network"
+
+[etherscan]
+atlantic-testnet = { key = "${PHAROS_API_KEY}" }

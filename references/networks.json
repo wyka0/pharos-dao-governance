@@ -1,0 +1,22 @@
+{
+  "networks": [
+    {
+      "name": "atlantic-testnet",
+      "displayName": "Atlantic Testnet",
+      "rpcUrl": "https://atlantic.dplabs-internal.com",
+      "chainId": 688689,
+      "explorerUrl": "https://atlantic.pharosscan.xyz",
+      "nativeToken": "PHRS",
+      "type": "testnet"
+    },
+    {
+      "name": "mainnet",
+      "displayName": "Pharos Mainnet",
+      "rpcUrl": "https://rpc.pharos.network",
+      "chainId": 2,
+      "explorerUrl": "https://pharosscan.xyz",
+      "nativeToken": "PROS",
+      "type": "mainnet"
+    }
+  ]
+}

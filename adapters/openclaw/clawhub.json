@@ -1,0 +1,72 @@
+{
+  "name": "pharos-dao-governance",
+  "version": "3.0.0",
+  "description": "Full lifecycle DAO Governance Skill for Pharos Agent Center — create, vote, delegate, activity feed, health check, AI assessment",
+  "scripts": {
+    "create_proposal": {
+      "command": "node scripts/create_proposal.js",
+      "description": "Create a proposal with threshold pre-check",
+      "params": ["governor_address", "target_address", "value_in_phrs", "calldata_hex", "description", "network"]
+    },
+    "get_proposals": {
+      "command": "node scripts/get_proposals.js",
+      "description": "List proposals (auto-detects GovernorBravo or OZ Governor via events)",
+      "params": ["governor_address", "network", "limit"]
+    },
+    "proposal_details": {
+      "command": "node scripts/proposal_details.js",
+      "description": "View proposal details with vote tally and quorum",
+      "params": ["governor_address", "proposal_id", "network"]
+    },
+    "get_vote_power": {
+      "command": "node scripts/get_vote_power.js",
+      "description": "Check voting power, delegation, active proposals",
+      "params": ["governor_address", "voter_address", "network"]
+    },
+    "cast_vote": {
+      "command": "node scripts/cast_vote.js",
+      "description": "Cast vote (0=Against, 1=For, 2=Abstain). Use --dry-run for safety.",
+      "params": ["governor_address", "proposal_id", "support", "network", "reason"],
+      "flags": ["--dry-run"]
+    },
+    "delegate_votes": {
+      "command": "node scripts/delegate_votes.js",
+      "description": "Delegate voting power to an address",
+      "params": ["governor_address", "delegate_address", "network", "token_address_override"]
+    },
+    "get_results": {
+      "command": "node scripts/get_results.js",
+      "description": "Live vote tally with quorum progress and block countdown",
+      "params": ["governor_address", "proposal_id", "network"]
+    },
+    "governance_activity": {
+      "command": "node scripts/governance_activity.js",
+      "description": "Time-bound governance activity feed: proposals, pass rate, most active proposer",
+      "params": ["governor_address", "network", "days"]
+    },
+    "delegate_insights": {
+      "command": "node scripts/delegate_insights.js",
+      "description": "Delegate power analysis: top delegates, governance concentration (HHI), Nakamoto coefficient",
+      "params": ["governor_address", "network"]
+    },
+    "governance_health": {
+      "command": "node scripts/governance_health.js",
+      "description": "DAO health report — composite score (participation 25%, quorum 25%, success 20%, turnout 30%)",
+      "params": ["governor_address", "network"]
+    },
+    "governance_risk_report": {
+      "command": "node scripts/governance_risk_report.js",
+      "description": "Governance Risk Report — composite risk score across 6 dimensions: centralization, participation, quorum, delegate diversity, success rate, proposal health",
+      "params": ["governor_address", "network"]
+    },
+    "governance_assessment": {
+      "command": "node scripts/governance_assessment.js",
+      "description": "AI Governance Assessment — data-driven signal (not advice). Risk + quorum + vote analysis → FOR/AGAINST/REVIEW",
+      "params": ["governor_address", "proposal_id", "network"]
+    }
+  },
+  "env": {
+    "PRIVATE_KEY": "Required for create, vote, and delegate operations",
+    "RPC_URL": "Optional RPC override"
+  }
+}

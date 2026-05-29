@@ -1,0 +1,14 @@
+[
+  { "type":"function","name":"getVotes","inputs":[{"name":"account","type":"address"}],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"},
+  { "type":"function","name":"delegates","inputs":[{"name":"account","type":"address"}],"outputs":[{"name":"","type":"address"}],"stateMutability":"view"},
+  { "type":"function","name":"delegate","inputs":[{"name":"delegatee","type":"address"}],"outputs":[],"stateMutability":"nonpayable"},
+  { "type":"function","name":"delegateBySig","inputs":[{"name":"delegatee","type":"address"},{"name":"nonce","type":"uint256"},{"name":"expiry","type":"uint256"},{"name":"v","type":"uint8"},{"name":"r","type":"bytes32"},{"name":"s","type":"bytes32"}],"outputs":[],"stateMutability":"nonpayable"},
+  { "type":"function","name":"nonces","inputs":[{"name":"owner","type":"address"}],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"},
+  { "type":"function","name":"totalSupply","inputs":[],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"},
+  { "type":"function","name":"balanceOf","inputs":[{"name":"account","type":"address"}],"outputs":[{"name":"","type":"uint256"}],"stateMutability":"view"},
+  { "type":"function","name":"symbol","inputs":[],"outputs":[{"name":"","type":"string"}],"stateMutability":"view"},
+  { "type":"function","name":"decimals","inputs":[],"outputs":[{"name":"","type":"uint8"}],"stateMutability":"view"},
+  { "type":"function","name":"name","inputs":[],"outputs":[{"name":"","type":"string"}],"stateMutability":"view"},
+  { "type":"event","name":"DelegateChanged","inputs":[{"name":"delegator","type":"address","indexed":true},{"name":"fromDelegate","type":"address","indexed":true},{"name":"toDelegate","type":"address","indexed":true}]},
+  { "type":"event","name":"DelegateVotesChanged","inputs":[{"name":"delegate","type":"address","indexed":true},{"name":"previousBalance","type":"uint256","indexed":false},{"name":"newBalance","type":"uint256","indexed":false}]}
+]
