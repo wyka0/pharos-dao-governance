@@ -27,13 +27,21 @@ function loadABI(name) {
   );
 }
 
+function assertValidAddress(address, label) {
+  if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    throw new Error(`Invalid ${label}: "${address}". Expected a valid 0x-prefixed 40-hex-char address.`);
+  }
+}
+
 function getGovernorContract(governorAddress, network) {
+  assertValidAddress(governorAddress, "governor address");
   const abi = loadABI("governor_abi");
   const provider = getProvider(network);
   return new ethers.Contract(governorAddress, abi, provider);
 }
 
 function getGovernanceTokenContract(tokenAddress, network) {
+  assertValidAddress(tokenAddress, "token address");
   const abi = loadABI("governance_token_abi");
   const provider = getProvider(network);
   return new ethers.Contract(tokenAddress, abi, provider);
