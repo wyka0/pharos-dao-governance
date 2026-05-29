@@ -1,6 +1,7 @@
 const { ethers } = require("ethers");
 const fs = require("fs");
 const path = require("path");
+require("dotenv").config();
 
 function getNetwork(network = "atlantic-testnet") {
   const networks = JSON.parse(
