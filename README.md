@@ -1,7 +1,5 @@
 # Pharos DAO Governance Skill
 
-Built for the **Pharos Agent Center — Skill Builder Campaign**.
-
 Full lifecycle DAO governance for Pharos. **Create → Vote → Delegate → Analyze → Get AI Recommendations**. Works with any OpenZeppelin Governor-compatible DAO.
 
 ## Features
