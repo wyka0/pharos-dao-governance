@@ -76,7 +76,8 @@ if (require.main === module) {
   const addr = process.argv[2];
   const pid = process.argv[3];
   const support = parseInt(process.argv[4]);
-  const net = process.argv[5] || "atlantic-testnet";
+  let net = process.argv[5] || "atlantic-testnet";
+  if (net.startsWith("--")) net = "atlantic-testnet";
   const reason = process.argv[6] || "";
   const dryrun = process.argv.includes("--dry-run");
 
