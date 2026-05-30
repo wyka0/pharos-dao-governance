@@ -6,4 +6,7 @@ node_modules/
 contracts/out/
 contracts/cache/
 contracts/lib/
+out/
+cache/
+foundry.lock
 wallets.txt

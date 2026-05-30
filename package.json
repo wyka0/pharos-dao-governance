@@ -14,7 +14,8 @@
     "proposals": "node scripts/get_proposals.js",
     "results": "node scripts/get_results.js",
     "risk": "node scripts/governance_risk_report.js",
-    "vote": "node scripts/cast_vote.js"
+    "vote": "node scripts/cast_vote.js",
+    "test": "forge test -v"
   },
   "dependencies": {
     "ethers": "^5.7.2",
