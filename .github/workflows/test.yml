@@ -1,0 +1,25 @@
+name: Forge Tests
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Install forge-std
+        run: forge install foundry-rs/forge-std --no-git
+
+      - name: Install OpenZeppelin
+        run: forge install openzeppelin/openzeppelin-contracts --no-git
+
+      - name: Run tests
+        run: forge test -v
