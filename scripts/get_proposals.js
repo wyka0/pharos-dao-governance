@@ -1,3 +1,4 @@
+const { ethers } = require("ethers");
 const pharos = require("./pharos_rpc");
 
 const STATE_MAP = {
@@ -107,8 +108,11 @@ if (require.main === module) {
         console.log(`  #${p.id} — Error: ${p.error}`);
         continue;
       }
-      const sum = Number(p.forVotes || 0) + Number(p.againstVotes || 0) + Number(p.abstainVotes || 0);
-      const pct = sum ? ((Number(p.forVotes || 0) / sum) * 100).toFixed(1) : "?";
+      const forBN = ethers.BigNumber.from(p.forVotes || 0);
+      const againstBN = ethers.BigNumber.from(p.againstVotes || 0);
+      const abstainBN = ethers.BigNumber.from(p.abstainVotes || 0);
+      const sumBN = forBN.add(againstBN).add(abstainBN);
+      const pct = sumBN.gt(0) ? (forBN.mul(10000).div(sumBN).toNumber() / 100).toFixed(1) : "?";
       const desc = p.description || "(no description available)";
       const stateTag = p.state || "?";
       const forTag = p.forVotes ? pharos.formatRawVotes(p.forVotes) : "?";

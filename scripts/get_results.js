@@ -1,3 +1,4 @@
+const { ethers } = require("ethers");
 const pharos = require("./pharos_rpc");
 
 const STATE_MAP = {
@@ -12,8 +13,7 @@ async function getResults(governorAddress, proposalId, network = "atlantic-testn
   const votes = await gov.proposalVotes(proposalId);
   const stateCode = await gov.state(proposalId);
   const totalBN = votes.forVotes.add(votes.againstVotes).add(votes.abstainVotes);
-  const total = Number(totalBN);
-  const pct = (v) => total ? ((Number(v) / total) * 100).toFixed(1) : "0.0";
+  const pct = (v) => totalBN.gt(0) ? (v.mul(10000).div(totalBN).toNumber() / 100).toFixed(1) : "0.0";
 
   let currentBlock;
   try {
@@ -41,8 +41,7 @@ async function getResults(governorAddress, proposalId, network = "atlantic-testn
 
   let quorumVal = "0";
   try { quorumVal = (await gov.quorum(startBlock || 0)).toString(); } catch (_) {}
-  const quorumNum = Number(quorumVal);
-  const forVotesNum = Number(votes.forVotes);
+  const quorumBN = ethers.BigNumber.from(quorumVal || "0");
 
   let description = "";
   try {
@@ -64,8 +63,8 @@ async function getResults(governorAddress, proposalId, network = "atlantic-testn
     againstPct: pct(votes.againstVotes),
     abstainPct: pct(votes.abstainVotes),
     quorum: quorumVal,
-    quorumPct: quorumNum > 0 ? ((forVotesNum / quorumNum) * 100).toFixed(1) : "0.0",
-    quorumMet: quorumNum > 0 && forVotesNum >= quorumNum,
+    quorumPct: quorumBN.gt(0) ? (votes.forVotes.mul(10000).div(quorumBN).toNumber() / 100).toFixed(1) : "0.0",
+    quorumMet: quorumBN.gt(0) && votes.forVotes.gte(quorumBN),
     currentBlock,
     deadlineBlock,
     blocksRemaining: Math.max(0, blocksRemaining),
