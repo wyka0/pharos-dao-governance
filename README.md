@@ -27,7 +27,7 @@ cd pharos-dao-governance
 npm install
 forge test
 npm test
-cp .env.example .env
+cp .env.real .env
 ```
 
 Required in `.env`:
