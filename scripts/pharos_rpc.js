@@ -3,6 +3,22 @@ const fs = require("fs");
 const path = require("path");
 require("dotenv").config();
 
+async function withRetry(fn, maxRetries = 3, baseDelay = 1000) {
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        const delay = baseDelay * Math.pow(2, attempt);
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+  }
+  throw lastError;
+}
+
 function getNetwork(network = "atlantic-testnet") {
   const networks = JSON.parse(
     fs.readFileSync(path.resolve(__dirname, "../references/networks.json"), "utf-8")
@@ -93,10 +109,10 @@ async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
     while (cursor < endAt && chunks < MAX_CHUNKS_FWD) {
       const chunkEnd = Math.min(endAt, cursor + RANGE);
       try {
-        const logs = await provider.getLogs({
+        const logs = await withRetry(() => provider.getLogs({
           address: gov.address, topics: [eventTopic],
           fromBlock: cursor, toBlock: chunkEnd,
-        });
+        }));
         for (const log of logs) {
           const parsed = iface.parseLog(log);
           results.push({
@@ -119,10 +135,10 @@ async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
     while (endBlock > 0 && chunks < MAX_CHUNKS_BWD) {
       const startBlock = Math.max(0, endBlock - RANGE + 1);
       try {
-        const logs = await provider.getLogs({
+        const logs = await withRetry(() => provider.getLogs({
           address: gov.address, topics: [eventTopic],
           fromBlock: startBlock, toBlock: endBlock,
-        });
+        }));
         for (const log of logs) {
           const parsed = iface.parseLog(log);
           results.push({
@@ -162,10 +178,10 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
     while (cursor < endAt && chunks < MAX_CHUNKS_FWD) {
       const chunkEnd = Math.min(endAt, cursor + RANGE);
       try {
-        const logs = await provider.getLogs({
+        const logs = await withRetry(() => provider.getLogs({
           address: tokenAddress, topics: [eventTopic],
           fromBlock: cursor, toBlock: chunkEnd,
-        });
+        }));
         for (const log of logs) {
           const parsed = iface.parseLog(log);
           results.push({
@@ -185,10 +201,10 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
     while (endBlock > 0 && chunks < MAX_CHUNKS_BWD) {
       const startBlock = Math.max(0, endBlock - RANGE + 1);
       try {
-        const logs = await provider.getLogs({
+        const logs = await withRetry(() => provider.getLogs({
           address: tokenAddress, topics: [eventTopic],
           fromBlock: startBlock, toBlock: endBlock,
-        });
+        }));
         for (const log of logs) {
           const parsed = iface.parseLog(log);
           results.push({

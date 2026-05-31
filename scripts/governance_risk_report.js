@@ -1,3 +1,4 @@
+const { ethers } = require("ethers");
 const pharos = require("./pharos_rpc");
 const { governanceHealth } = require("./governance_health");
 const { delegateInsights } = require("./delegate_insights");
@@ -124,7 +125,7 @@ async function governanceRiskReport(governorAddress, network = "atlantic-testnet
     } catch (_) {}
     if (latestId !== undefined && latestId >= 0) {
       const detail = await proposalDetails(governorAddress, latestId, network);
-      if (detail.state === "Active" && Number(detail.againstVotes) > Number(detail.forVotes) * 1.5) {
+      if (detail.state === "Active" && ethers.BigNumber.from(detail.againstVotes).gt(ethers.BigNumber.from(detail.forVotes).mul(15).div(10))) {
         findings.push({ severity: "medium", category: "Contentious Proposal", detail: `Latest proposal #${detail.id} has strong opposition (${detail.againstPct}% Against). May indicate governance friction.` });
         riskScore += 10;
       }

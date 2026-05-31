@@ -8,7 +8,7 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
   const provider = pharos.getProvider(network);
 
   // Discover governance token
-  let tokenAddr, tokenSymbol = "VOTE", totalSupply = 0, totalSupplyRaw = "0";
+  let tokenAddr, tokenSymbol = "VOTE", totalSupplyBN = ethers.BigNumber.from(0), totalSupplyRaw = "0";
   try {
     tokenAddr = await gov.token();
     if (!tokenAddr || tokenAddr === ethers.constants.AddressZero) {
@@ -16,9 +16,8 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
     }
     const t = pharos.getGovernanceTokenContract(tokenAddr, network);
     tokenSymbol = await t.symbol();
-    const tsBN = await t.totalSupply();
-    totalSupply = Number(tsBN);
-    totalSupplyRaw = tsBN.toString();
+    totalSupplyBN = await t.totalSupply();
+    totalSupplyRaw = totalSupplyBN.toString();
   } catch (_) {
     return { error: "Could not discover governance token. Governor may not implement token().", network, governor: governorAddress };
   }
@@ -55,32 +54,30 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
   for (const addr of allDelegates) {
     try {
       const powerBN = await govToken.getVotes(addr);
-      const power = Number(powerBN);
-      if (power > 0) {
+      if (powerBN.gt(0)) {
         totalVotingPowerBN = totalVotingPowerBN.add(powerBN);
         delegatePower.push({
           address: addr,
-          votingPower: power,
+          votingPower: powerBN,
           votingPowerRaw: powerBN.toString(),
-          percentage: totalSupply > 0 ? (power / totalSupply) * 100 : 0,
+          percentage: totalSupplyBN.gt(0) ? powerBN.mul(10000).div(totalSupplyBN).toNumber() / 100 : 0,
         });
       }
     } catch (_) {}
   }
 
   // Sort by voting power descending
-  delegatePower.sort((a, b) => b.votingPower - a.votingPower);
+  delegatePower.sort((a, b) => {
+    if (b.votingPower.gt(a.votingPower)) return 1;
+    if (b.votingPower.lt(a.votingPower)) return -1;
+    return 0;
+  });
 
   // Calculate concentration metrics
-  const totalVotingPower = Number(totalVotingPowerBN);
   const top1 = delegatePower[0]?.percentage || 0;
   const top3 = delegatePower.slice(0, 3).reduce((s, d) => s + d.percentage, 0);
   const top5 = delegatePower.slice(0, 5).reduce((s, d) => s + d.percentage, 0);
   const top10 = delegatePower.slice(0, 10).reduce((s, d) => s + d.percentage, 0);
-
-  // Herfindahl-Hirschman Index approximation (sum of squared shares)
-  const hhi = delegatePower.reduce((s, d) => s + Math.pow(d.votingPower / totalVotingPower, 2), 0);
-  const normalizedHhi = ((hhi - 1 / delegatePower.length) / (1 - 1 / delegatePower.length)) * 100;
 
   // Concentration classification
   let concentration, concentrationColor;
@@ -99,12 +96,18 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
   }
 
   // Nakamoto coefficient: number of delegates needed to reach 51%
-  let cumulative = 0, nakamoto = 0;
+  let cumulativeBN = ethers.BigNumber.from(0), nakamoto = 0;
+  const targetBN = totalSupplyBN.mul(51).div(100);
   for (const d of delegatePower) {
-    cumulative += d.percentage;
+    cumulativeBN = cumulativeBN.add(d.votingPower);
     nakamoto++;
-    if (cumulative >= 51) break;
+    if (cumulativeBN.gte(targetBN)) break;
   }
+
+  // Herfindahl-Hirschman Index approximation (sum of squared shares)
+  const totalVPct = delegatePower.reduce((s, d) => s + d.percentage, 0);
+  const hhi = delegatePower.reduce((s, d) => s + Math.pow(d.percentage / totalVPct, 2), 0);
+  const normalizedHhi = ((hhi - 1 / delegatePower.length) / (1 - 1 / delegatePower.length)) * 100;
 
   return {
     tokenAddress: tokenAddr,
@@ -183,4 +186,70 @@ if (require.main === module) {
   }).catch(console.error);
 }
 
-module.exports = { delegateInsights };
+async function getDelegatePowersMulticall(governorAddress, delegateAddresses, network = "atlantic-testnet") {
+  if (!delegateAddresses || delegateAddresses.length === 0) return [];
+  const govToken = pharos.getGovernanceTokenContract(
+    (await pharos.getGovernorContract(governorAddress, network).token()),
+    network
+  );
+  const results = [];
+  const chunkSize = 50;
+  for (let i = 0; i < delegateAddresses.length; i += chunkSize) {
+    const chunk = delegateAddresses.slice(i, i + chunkSize);
+    const calls = chunk.map((addr) => ({
+      target: govToken.address,
+      callData: govToken.interface.encodeFunctionData("getVotes", [addr]),
+    }));
+    // If available, use Multicall3; otherwise fallback to sequential
+    let outputs;
+    try {
+      const multicallAddr = "0xcA11bde05977b3631167028862bE2a173976CA11";
+      const iMulticall = new ethers.utils.Interface([
+        "function aggregate(tuple(address target, bytes callData)[] calls) view returns (uint256 blockNumber, bytes[] returnData)",
+      ]);
+      const mc = new ethers.Contract(multicallAddr, iMulticall, pharos.getProvider(network));
+      const { returnData } = await mc.aggregate(calls);
+      outputs = returnData;
+    } catch (_) {
+      // Fallback: sequential
+      for (const addr of chunk) {
+        try {
+          const powerBN = await govToken.getVotes(addr);
+          outputs.push(govToken.interface.encodeFunctionResult("getVotes", [powerBN]));
+        } catch (_) {
+          outputs.push("0x");
+        }
+      }
+    }
+    for (let j = 0; j < chunk.length; j++) {
+      try {
+        const [powerBN] = govToken.interface.decodeFunctionResult("getVotes", outputs[j]);
+        results.push({ address: chunk[j], votingPower: powerBN });
+      } catch (_) {
+        results.push({ address: chunk[j], votingPower: ethers.BigNumber.from(0) });
+      }
+    }
+  }
+  return results;
+}
+
+function calculateHHI(delegatePower) {
+  const totalVPct = delegatePower.reduce((s, d) => s + d.percentage, 0);
+  if (totalVPct === 0) return 0;
+  const hhi = delegatePower.reduce((s, d) => s + Math.pow(d.percentage / totalVPct, 2), 0);
+  const n = delegatePower.length;
+  if (n <= 1) return n === 1 ? 10000 : 0;
+  return ((hhi - 1 / n) / (1 - 1 / n)) * 100;
+}
+
+function calculateNakamoto(delegatePower, threshold = 51) {
+  let cumulative = 0, nakamoto = 0;
+  for (const d of delegatePower) {
+    cumulative += d.percentage;
+    nakamoto++;
+    if (cumulative >= threshold) break;
+  }
+  return delegatePower.length > 0 ? nakamoto : 0;
+}
+
+module.exports = { delegateInsights, getDelegatePowersMulticall, calculateHHI, calculateNakamoto };

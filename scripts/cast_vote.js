@@ -1,4 +1,5 @@
 const pharos = require("./pharos_rpc");
+const { simulateProposal } = require("./simulate_proposal");
 
 const VOTE_TYPES = { 0: "Against", 1: "For", 2: "Abstain" };
 
@@ -90,29 +91,36 @@ if (require.main === module) {
   const wallet = pharos.getWallet(net);
   const voter = wallet.address;
 
-  preCheck(addr, pid, voter, net)
-    .then((desc) => {
-      console.log(`\n🗳️  Proposal #${pid}: ${(desc || "?").slice(0, 100)}`);
-      console.log(`Voter: ${voter}`);
-      console.log(`Vote:  ${VOTE_TYPES[support]}`);
-      console.log(`Network: ${net}`);
+  simulateProposal(addr, pid, net)
+    .then((sim) => {
+      console.log(`\n📊 Proposal Simulation — #${pid}`);
+      console.log(`State:   ${sim.state}`);
+      console.log(`For:     ${pharos.formatRawVotes(sim.forVotes)}  (${sim.forPct.toFixed(1)}%)`);
+      console.log(`Against: ${pharos.formatRawVotes(sim.againstVotes)}  (${sim.againstPct.toFixed(1)}%)`);
+      console.log(`Quorum:  ${sim.quorumMet ? "✅ Met" : "❌ Not met"}`);
+      return preCheck(addr, pid, voter, net).then((desc) => {
+        console.log(`\n🗳️  Proposal #${pid}: ${(desc || "?").slice(0, 100)}`);
+        console.log(`Voter: ${voter}`);
+        console.log(`Vote:  ${VOTE_TYPES[support]}`);
+        console.log(`Network: ${net}`);
 
-      if (dryrun) {
-        return dryRun(addr, pid, support, net).then((d) => {
-          console.log(`\n🔍 DRY RUN — No transaction sent`);
-          console.log(`Estimated Gas: ${d.estimatedGas}`);
-          console.log(`Estimated Cost: ${d.estimatedCostEth} ${pharos.getNetwork(net).nativeToken}`);
-          console.log(`To execute: remove --dry-run flag`);
+        if (dryrun) {
+          return dryRun(addr, pid, support, net).then((d) => {
+            console.log(`\n🔍 DRY RUN — No transaction sent`);
+            console.log(`Estimated Gas: ${d.estimatedGas}`);
+            console.log(`Estimated Cost: ${d.estimatedCostEth} ${pharos.getNetwork(net).nativeToken}`);
+            console.log(`To execute: remove --dry-run flag`);
+          });
+        }
+
+        console.log(`\nProceed? This will send an on-chain transaction.`);
+        return castVote(addr, pid, support, net, reason).then((r) => {
+          console.log(`\n✅ Vote cast! ${r.vote}`);
+          console.log(`Tx: ${r.explorerLink}`);
         });
-      }
-
-      console.log(`\nProceed? This will send an on-chain transaction.`);
-      return castVote(addr, pid, support, net, reason).then((r) => {
-        console.log(`\n✅ Vote cast! ${r.vote}`);
-        console.log(`Tx: ${r.explorerLink}`);
       });
     })
     .catch(console.error);
 }
 
-module.exports = { castVote, preCheck, dryRun };
+module.exports = { castVote, preCheck, dryRun, simulateProposal };

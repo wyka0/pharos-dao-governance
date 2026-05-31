@@ -1,7 +1,51 @@
 const pharos = require("./pharos_rpc");
+const { ethers } = require("ethers");
 
 const STATE_NAMES = { 0:"Pending",1:"Active",2:"Canceled",3:"Defeated",4:"Succeeded",5:"Queued",6:"Expired",7:"Executed" };
 const QUORUM_ALERT_BLOCKS = 1000; // warn if < ~3h remain and quorum not met
+
+function assessProposal(proposal, votes, blockNumber, quorumVotes) {
+  const fVotes = votes.forVotes;
+  const aVotes = votes.againstVotes;
+  const totalVotes = fVotes.add(aVotes);
+
+  const forPct = totalVotes.eq(0) ? 0 : fVotes.mul(100).div(totalVotes).toNumber();
+  const againstPct = totalVotes.eq(0) ? 0 : aVotes.mul(100).div(totalVotes).toNumber();
+  const quorumProb = totalVotes.eq(0) ? 0 : totalVotes.mul(100).div(quorumVotes).toNumber();
+
+  let assessment = "REVIEW";
+  let confidence = "Low";
+  const reasoning = [];
+
+  if (totalVotes.eq(0)) {
+    reasoning.push("No votes cast yet.");
+    assessment = "REVIEW";
+    confidence = "Low";
+  } else if (quorumProb < 50) {
+    assessment = "FOR";
+    confidence = "Low";
+    reasoning.push(`Quorum probability is ${quorumProb.toFixed(0)}%.`);
+  } else if (forPct >= 70) {
+    assessment = "FOR";
+    confidence = forPct >= 85 ? "High" : "Medium";
+    reasoning.push(`Strong support: ${forPct.toFixed(1)}% FOR.`);
+  } else if (againstPct >= 60) {
+    assessment = "AGAINST";
+    confidence = againstPct >= 75 ? "High" : "Medium";
+    reasoning.push(`Strong opposition: ${againstPct.toFixed(1)}% AGAINST.`);
+  } else {
+    assessment = "REVIEW";
+    confidence = "Medium";
+    reasoning.push(`Vote split: ${forPct.toFixed(1)}% FOR, ${againstPct.toFixed(1)}% AGAINST.`);
+  }
+
+  const blocksLeft = proposal.endBlock - blockNumber;
+  if (blocksLeft < 1000 && totalVotes.lt(quorumVotes)) {
+    reasoning.push(`⚠️ QUORUM ALERT: Only ${blocksLeft} blocks left and quorum not met.`);
+  }
+
+  return { assessment, confidence, reasoning, forPct, againstPct, quorumProb };
+}
 
 // Risk keywords mapped to severity
 const RISK_KEYWORDS = [
@@ -15,14 +59,35 @@ const RISK_KEYWORDS = [
   { words: ["burn","buyback","reduce supply"], severity: "Low", label: "Tokenomics" },
 ];
 
-function assessRisk(description) {
-  const lower = description.toLowerCase();
-  for (const r of RISK_KEYWORDS) {
-    for (const w of r.words) {
-      if (lower.includes(w)) return { risk: r.severity, category: r.label };
+const RISK_SELECTORS = {
+  "0x8da5cb5b": { severity: "High", category: "Ownership Query" },
+  "0x3659cfe6": { severity: "Critical", category: "Proxy Upgrade" },
+  "0x153ab6b5": { severity: "Critical", category: "Emergency Pause" },
+  "0xf2fde38b": { severity: "High",     category: "Transfer Ownership" },
+  "0x8456cb59": { severity: "Critical", category: "Pause" },
+  "0x3f4ba83a": { severity: "Critical", category: "Unpause" },
+};
+
+function assessRisk(proposal) {
+  // Tier 1: calldata selector — overrides description keywords
+  if (proposal.calldatas && Array.isArray(proposal.calldatas)) {
+    for (const calldata of proposal.calldatas) {
+      if (calldata && calldata.length >= 10) {
+        const selector = calldata.slice(0, 10).toLowerCase();
+        if (RISK_SELECTORS[selector]) {
+          return RISK_SELECTORS[selector];
+        }
+      }
     }
   }
-  return { risk: "Low", category: "General Governance" };
+  // Tier 2: description keyword fallback
+  const lower = (proposal.description || "").toLowerCase();
+  for (const r of RISK_KEYWORDS) {
+    for (const w of r.words) {
+      if (lower.includes(w)) return { severity: r.severity, category: r.label };
+    }
+  }
+  return { severity: "Low", category: "General Governance" };
 }
 
 async function governanceRecommendation(governorAddress, proposalId, network = "atlantic-testnet") {
@@ -88,7 +153,7 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
   const forPct = totalExAbstain > 0 ? (fVotes / totalExAbstain) * 100 : 0;
 
   // Risk assessment
-  const { risk, category } = assessRisk(description);
+  const { severity: risk, category } = assessRisk({ description });
 
   // Participation rate
   const participationRate = totalSupply > 0 ? (totalVotes / totalSupply) * 100 : 0;
@@ -272,22 +337,21 @@ async function quorumAlertCheck(governorAddress, network = "atlantic-testnet") {
       if (stateCode !== 1) continue;
       const votes = await gov.proposalVotes(ev.proposalId);
       const deadlineBlock = Number(ev.voteEnd);
-      const quorumVal = Number(await gov.quorum(Number(ev.voteStart) || 0));
-      const forVotes = Number(votes.forVotes);
+      const quorumBN = await gov.quorum(Number(ev.voteStart) || 0);
+      const quorumVal = quorumBN.toNumber();
+      const forVotes = votes.forVotes.toNumber();
       const blocksLeft = deadlineBlock - currentBlock;
 
-      if (!quorumVal) continue;
-      if (forVotes >= quorumVal) continue;
+      if (quorumBN.eq(0)) continue;
+      if (votes.forVotes.gte(quorumBN)) continue;
       if (blocksLeft <= 0 || blocksLeft > QUORUM_ALERT_BLOCKS) continue;
 
-      const forVotesRaw = votes.forVotes.toString();
-      const quorumRaw = (await gov.quorum(Number(ev.voteStart) || 0)).toString();
       alerts.push({
         proposalId: ev.proposalId.toString(),
         description: ev.description.slice(0, 120),
-        forVotes: pharos.formatRawVotes(forVotesRaw),
-        quorumRequired: pharos.formatRawVotes(quorumRaw),
-        quorumProgress: ((forVotes / quorumVal) * 100).toFixed(0),
+        forVotes: pharos.formatRawVotes(votes.forVotes.toString()),
+        quorumRequired: pharos.formatRawVotes(quorumBN.toString()),
+        quorumProgress: votes.forVotes.mul(100).div(quorumBN).toNumber().toFixed(0),
         blocksRemaining: blocksLeft.toLocaleString(),
       });
     } catch (_) {}
@@ -296,4 +360,4 @@ async function quorumAlertCheck(governorAddress, network = "atlantic-testnet") {
   return alerts;
 }
 
-module.exports = { governanceRecommendation, assessRisk, quorumAlertCheck };
+module.exports = { governanceRecommendation, assessProposal, assessRisk, quorumAlertCheck };

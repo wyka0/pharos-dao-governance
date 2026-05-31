@@ -15,10 +15,14 @@
     "results": "node scripts/get_results.js",
     "risk": "node scripts/governance_risk_report.js",
     "vote": "node scripts/cast_vote.js",
-    "test": "forge test -v"
+    "test": "\"%USERPROFILE%\\.foundry\\bin\\forge.exe\" test -v && npx jest"
   },
   "dependencies": {
     "ethers": "^5.7.2",
     "dotenv": "^16.4.5"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "nock": "^13.5.0"
   }
 }
