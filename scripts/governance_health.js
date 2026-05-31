@@ -65,13 +65,12 @@ async function governanceHealth(governorAddress, network = "atlantic-testnet") {
   let tokenAddr;
   try { tokenAddr = await gov.token(); } catch (err) { console.warn("gov.token() failed:", err.message); tokenAddr = null; }
 
-  let totalSupply = 0, totalSupplyRaw = "0", tokenSymbol = "VOTE";
+  let totalSupplyRaw = "0", tokenSymbol = "VOTE";
   if (tokenAddr) {
     try {
       const t = pharos.getGovernanceTokenContract(tokenAddr, network);
       tokenSymbol = await t.symbol();
       const tsBN = await t.totalSupply();
-      totalSupply = Number(tsBN);
       totalSupplyRaw = tsBN.toString();
     } catch (err) { console.warn("token totalSupply failed:", err.message); }
   }
