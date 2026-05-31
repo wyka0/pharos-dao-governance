@@ -105,7 +105,12 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
   // Herfindahl-Hirschman Index approximation (sum of squared shares)
   const totalVPct = delegatePower.reduce((s, d) => s + d.percentage, 0);
   const hhi = delegatePower.reduce((s, d) => s + Math.pow(d.percentage / totalVPct, 2), 0);
-  const normalizedHhi = ((hhi - 1 / delegatePower.length) / (1 - 1 / delegatePower.length)) * 100;
+  let normalizedHhi = 0;
+  if (delegatePower.length > 1) {
+    normalizedHhi = ((hhi - 1 / delegatePower.length) / (1 - 1 / delegatePower.length)) * 100;
+  } else if (delegatePower.length === 1) {
+    normalizedHhi = 100;
+  }
 
   return {
     tokenAddress: tokenAddr,
@@ -116,7 +121,7 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
     topDelegates: delegatePower.slice(0, 15),
     concentration,
     concentrationColor,
-    normalizedHhi: normalizedHhi.toFixed(1),
+    normalizedHhi: Number.isFinite(normalizedHhi) ? normalizedHhi.toFixed(1) : "0.0",
     nakamotoCoefficient: nakamoto,
     metrics: {
       top1Share: top1.toFixed(1),
