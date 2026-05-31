@@ -22,7 +22,11 @@ Full lifecycle DAO governance for Pharos. **Create → Vote → Delegate → Ana
 ## Quickstart
 
 ```bash
+git clone --recursive https://github.com/wyka0/pharos-dao-governance.git
+cd pharos-dao-governance
 npm install
+forge test
+npm test
 cp .env.example .env
 ```
 
@@ -230,7 +234,7 @@ All values are clamped 0–100. Higher is better, but context matters — a new 
 ```bash
 # 1. Deploy demo DAO to Pharos testnet
 cd contracts
-forge install
+forge install OpenZeppelin/openzeppelin-contracts --no-git
 forge script script/DeployDAO.s.sol --rpc-url atlantic-testnet --broadcast
 # → Governor address printed. Export as $GOV
 
