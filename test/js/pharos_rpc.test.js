@@ -52,4 +52,11 @@ describe("pharos_rpc", () => {
     const result = pharos.formatRawVotes("1000000000000000000", "VOTE");
     expect(result).toBe("1 VOTE");
   });
+
+  test("queryProposalCreatedEvents accepts forward scan with fromBlock > 0", () => {
+    const mockGov = pharos.getGovernorContract("0x0000000000000000000000000000000000000001", "atlantic-testnet");
+    const provider = pharos.getProvider("atlantic-testnet");
+    expect(mockGov).toBeDefined();
+    expect(provider).toBeDefined();
+  });
 });

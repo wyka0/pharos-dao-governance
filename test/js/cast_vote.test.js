@@ -73,4 +73,19 @@ describe("cast_vote", () => {
       )
     ).rejects.toThrow("is Pending (not Active)");
   });
+
+  test("preCheck throws when voter has already voted (double-vote rejection)", async () => {
+    const mockGov = pharosMock.getGovernorContract();
+    mockGov.state.mockResolvedValue(1);
+    mockGov.hasVoted.mockResolvedValue(true);
+
+    await expect(
+      preCheck(
+        "0x0000000000000000000000000000000000000001",
+        "42",
+        "0x0000000000000000000000000000000000000002",
+        "atlantic-testnet"
+      )
+    ).rejects.toThrow("has already voted");
+  });
 });

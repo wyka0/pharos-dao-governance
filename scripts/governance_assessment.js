@@ -118,45 +118,48 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
     try { deadlineBlock = Number(await gov.proposalDeadline(proposalId)); } catch (_) {}
   }
 
-  let quorumVal = 0, quorumRaw = "0";
-  try { quorumRaw = (await gov.quorum(startBlock || 0)).toString(); quorumVal = Number(quorumRaw); } catch (_) {}
+  let quorumBN = ethers.BigNumber.from(0), quorumRaw = "0";
+  try { quorumBN = await gov.quorum(startBlock || 0); quorumRaw = quorumBN.toString(); } catch (_) {}
+  const quorumVal = quorumBN.toNumber();
 
-  let tokenAddr, tokenSymbol = "VOTE", totalSupply = 0;
+  let tokenAddr, tokenSymbol = "VOTE", totalSupplyBN = ethers.BigNumber.from(0);
   try {
     tokenAddr = await gov.token();
     if (tokenAddr) {
       const t = pharos.getGovernanceTokenContract(tokenAddr, network);
       tokenSymbol = await t.symbol();
-      totalSupply = Number(await t.totalSupply());
+      totalSupplyBN = await t.totalSupply();
     }
   } catch (_) {}
 
-  // --- Compute metrics ---
+  // --- Compute metrics (BigNumber-safe) ---
 
-  const fVotes = Number(votes.forVotes);
-  const aVotes = Number(votes.againstVotes);
-  const abVotes = Number(votes.abstainVotes);
-  const totalVotes = fVotes + aVotes + abVotes;
+  const fVotesBN = votes.forVotes;
+  const aVotesBN = votes.againstVotes;
+  const abVotesBN = votes.abstainVotes;
+  const totalVotesBN = fVotesBN.add(aVotesBN).add(abVotesBN);
 
   const blocksRemaining = deadlineBlock - currentBlock;
   const isActive = stateCode === 1;
   const hasEnded = stateCode !== 1 || blocksRemaining <= 0;
 
   // Quorum probability
-  const quorumProb = quorumVal > 0 ? Math.min(100, (fVotes / quorumVal) * 100) : 100;
-  const quorumMet = fVotes >= quorumVal;
+  const quorumProb = quorumBN.gt(0) ? fVotesBN.mul(100).div(quorumBN).toNumber() : 100;
+  const quorumMet = fVotesBN.gte(quorumBN);
 
   // Vote margin
-  const margin = fVotes - aVotes;
-  const marginBN = votes.forVotes.sub(votes.againstVotes);
-  const totalExAbstain = fVotes + aVotes;
-  const forPct = totalExAbstain > 0 ? (fVotes / totalExAbstain) * 100 : 0;
+  const marginBN = fVotesBN.sub(aVotesBN);
+  const totalExAbstainBN = fVotesBN.add(aVotesBN);
+  const forPct = totalExAbstainBN.eq(0) ? 0 : fVotesBN.mul(100).div(totalExAbstainBN).toNumber();
 
   // Risk assessment
-  const { severity: risk, category } = assessRisk({ description });
+  const { severity: risk, category } = assessRisk({
+    description,
+    calldatas: match?.calldatas || [],
+  });
 
   // Participation rate
-  const participationRate = totalSupply > 0 ? (totalVotes / totalSupply) * 100 : 0;
+  const participationRate = totalSupplyBN.gt(0) ? totalVotesBN.mul(100).div(totalSupplyBN).toNumber() : 0;
 
   // --- Generate AI assessment ---
 
@@ -209,11 +212,11 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
     }
 
     const marginDisplay = pharos.formatRawVotes(marginBN.abs().toString(), tokenSymbol);
-    if (margin > 0 && quorumMet) {
+    if (marginBN.gt(0) && quorumMet) {
       reasoning.push(`✅ Quorum met. For votes lead by ${marginDisplay}.`);
-    } else if (margin > 0) {
+    } else if (marginBN.gt(0)) {
       reasoning.push(`📊 For votes lead by ${marginDisplay}, but quorum not yet met at ${quorumProb.toFixed(0)}%.`);
-    } else if (fVotes > 0) {
+    } else if (fVotesBN.gt(0)) {
       reasoning.push(`Against votes lead by ${marginDisplay}.`);
     }
 

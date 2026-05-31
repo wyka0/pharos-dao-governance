@@ -39,7 +39,7 @@ async function governanceActivity(governorAddress, network = "atlantic-testnet",
       else if (stateCode === 3) failedCount++;
       else if (stateCode === 0) pendingCount++;
       else if (stateCode === 2) canceledCount++;
-    } catch (_) {}
+    } catch (err) { console.warn("gov.state or gov.proposalVotes failed for", ev.proposalId, ":", err.message); }
   }
 
   // Most active voter (who created the most proposals)
@@ -62,7 +62,7 @@ async function governanceActivity(governorAddress, network = "atlantic-testnet",
       const t = pharos.getGovernanceTokenContract(tokenAddr, network);
       tokenSymbol = await t.symbol();
     }
-  } catch (_) {}
+  } catch (err) { console.warn("gov.token() or token.symbol() failed:", err.message); }
 
   return {
     periodDays: days,

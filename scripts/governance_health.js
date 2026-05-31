@@ -1,3 +1,4 @@
+const { ethers } = require("ethers");
 const pharos = require("./pharos_rpc");
 
 const STATE_MAP = { 0:"Pending",1:"Active",2:"Canceled",3:"Defeated",4:"Succeeded",5:"Queued",6:"Expired",7:"Executed" };
@@ -15,15 +16,15 @@ async function governanceHealth(governorAddress, network = "atlantic-testnet") {
 
   try {
     totalCount = (await gov.proposalCount()).toNumber();
-  } catch (_) { totalCount = 0; }
+  } catch (err) { console.warn("proposalCount failed:", err.message); totalCount = 0; }
 
   if (totalCount > 0) {
     for (let i = 0; i < totalCount; i++) {
       try {
         const p = await gov.proposals(i);
         const s = await gov.state(i);
-        proposals.push({ id: i, state: s, forVotes: Number(p.forVotes || 0), againstVotes: Number(p.againstVotes || 0), startBlock: Number(p.startBlock || 0) });
-      } catch (_) {}
+        proposals.push({ id: i, state: s, forVotes: p.forVotes || ethers.BigNumber.from(0), againstVotes: p.againstVotes || ethers.BigNumber.from(0), startBlock: ethers.BigNumber.from(p.startBlock || 0) });
+      } catch (err) { console.warn("proposal fetch failed for id", i, ":", err.message); }
     }
   } else {
     // Fallback: events (OZ Governor)
@@ -34,33 +35,35 @@ async function governanceHealth(governorAddress, network = "atlantic-testnet") {
         try {
           const s = await gov.state(ev.proposalId);
           const votes = await gov.proposalVotes(ev.proposalId);
-          proposals.push({ id: ev.proposalId, state: s, forVotes: Number(votes.forVotes || 0), againstVotes: Number(votes.againstVotes || 0), voteStart: Number(ev.voteStart || 0) });
-        } catch (_) {
-          proposals.push({ id: ev.proposalId, state: -1, forVotes: 0, againstVotes: 0 });
+          proposals.push({ id: ev.proposalId, state: s, forVotes: votes.forVotes || ethers.BigNumber.from(0), againstVotes: votes.againstVotes || ethers.BigNumber.from(0), voteStart: ethers.BigNumber.from(ev.voteStart || 0) });
+        } catch (err) {
+          console.warn("event proposal fetch failed for", ev.proposalId, ":", err.message);
+          proposals.push({ id: ev.proposalId, state: -1, forVotes: ethers.BigNumber.from(0), againstVotes: ethers.BigNumber.from(0) });
         }
       }
-    } catch (_) {}
+    } catch (err) { console.warn("queryProposalCreatedEvents failed:", err.message); }
   }
 
   totalProposals = proposals.length;
 
   // 2. Governor parameters
   let votingDelay = 0, votingPeriod = 0, proposalThreshold = 0;
-  try { votingDelay = (await gov.votingDelay()).toNumber(); } catch (_) {}
-  try { votingPeriod = (await gov.votingPeriod()).toNumber(); } catch (_) {}
-  try { proposalThreshold = (await gov.proposalThreshold()).toString(); } catch (_) {}
+  try { votingDelay = (await gov.votingDelay()).toNumber(); } catch (err) { console.warn("votingDelay failed:", err.message); }
+  try { votingPeriod = (await gov.votingPeriod()).toNumber(); } catch (err) { console.warn("votingPeriod failed:", err.message); }
+  try { proposalThreshold = (await gov.proposalThreshold()).toString(); } catch (err) { console.warn("proposalThreshold failed:", err.message); }
 
-  let quorumVal = 0, quorumRaw = "0";
+  let quorumBN = ethers.BigNumber.from(0), quorumVal = 0, quorumRaw = "0";
   try {
     const currentBlock = await provider.getBlockNumber();
     const qBN = await gov.quorum(currentBlock);
+    quorumBN = qBN;
     quorumVal = Number(qBN);
     quorumRaw = qBN.toString();
-  } catch (_) {}
+  } catch (err) { console.warn("quorum() failed:", err.message); }
 
   // 3. Token / delegation info
   let tokenAddr;
-  try { tokenAddr = await gov.token(); } catch (_) { tokenAddr = null; }
+  try { tokenAddr = await gov.token(); } catch (err) { console.warn("gov.token() failed:", err.message); tokenAddr = null; }
 
   let totalSupply = 0, totalSupplyRaw = "0", tokenSymbol = "VOTE";
   if (tokenAddr) {
@@ -70,11 +73,11 @@ async function governanceHealth(governorAddress, network = "atlantic-testnet") {
       const tsBN = await t.totalSupply();
       totalSupply = Number(tsBN);
       totalSupplyRaw = tsBN.toString();
-    } catch (_) {}
+    } catch (err) { console.warn("token totalSupply failed:", err.message); }
   }
 
   // 4. Governance metrics
-  const totalVotesCast = proposals.reduce((s, p) => s + p.forVotes + p.againstVotes, 0);
+  const totalVotesCast = proposals.reduce((s, p) => s.add(p.forVotes).add(p.againstVotes), ethers.BigNumber.from(0));
   const succeeded = proposals.filter((p) => p.state === 4 || p.state === 5 || p.state === 7).length;
   const defeated = proposals.filter((p) => p.state === 3).length;
   const executed = proposals.filter((p) => p.state === 7).length;
@@ -82,14 +85,14 @@ async function governanceHealth(governorAddress, network = "atlantic-testnet") {
   const canceled = proposals.filter((p) => p.state === 2).length;
 
   const quorumMetCount = proposals.filter((p) => {
-    if (!quorumVal) return true;
-    return p.forVotes >= quorumVal;
+    if (quorumBN.eq(0)) return true;
+    return p.forVotes.gte(quorumBN);
   }).length;
 
   // --- Compute scores ---
 
   // Participation rate: % of proposals that had votes > 0
-  const proposalsWithVotes = proposals.filter((p) => p.forVotes + p.againstVotes > 0).length;
+  const proposalsWithVotes = proposals.filter((p) => p.forVotes.add(p.againstVotes).gt(0)).length;
   const participationRate = totalProposals > 0 ? (proposalsWithVotes / totalProposals) * 100 : 0;
 
   // Quorum success rate
@@ -100,7 +103,8 @@ async function governanceHealth(governorAddress, network = "atlantic-testnet") {
   const proposalSuccessRate = completed > 0 ? (succeeded / completed) * 100 : 0;
 
   // Voter participation: total voting power used vs potential
-  const voterParticipationRate = totalSupply > 0 ? Math.min(100, (totalVotesCast / totalSupply) * 100) : 0;
+  const supplyBN = ethers.BigNumber.from(totalSupplyRaw || "0");
+  const voterParticipationRate = supplyBN.gt(0) ? Math.min(100, totalVotesCast.mul(100).div(supplyBN).toNumber()) : 0;
 
   // Composite health score (weighted)
   const healthScore = Math.round(

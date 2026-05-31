@@ -1,3 +1,4 @@
+const { ethers } = require("ethers");
 const pharos = require("./pharos_rpc");
 
 const STATE_MAP = {
@@ -35,8 +36,7 @@ async function proposalDetails(governorAddress, proposalId, network = "atlantic-
   }
 
   const totalBN = votes.forVotes.add(votes.againstVotes).add(votes.abstainVotes);
-  const total = Number(totalBN);
-  const pct = (v) => total ? ((Number(v) / total) * 100).toFixed(1) : "0.0";
+  const pct = (v) => totalBN.gt(0) ? (v.mul(10000).div(totalBN).toNumber() / 100).toFixed(1) : "0.0";
 
   // Try to get description from ProposalCreated events
   let description = "";
@@ -70,7 +70,7 @@ async function proposalDetails(governorAddress, proposalId, network = "atlantic-
     stateCode,
     description: description || "(no description — check explorer)",
     quorum: quorumVal,
-    quorumMet: Number(quorumVal) > 0 && Number(votes.forVotes) >= Number(quorumVal),
+    quorumMet: ethers.BigNumber.from(quorumVal || "0").gt(0) && votes.forVotes.gte(ethers.BigNumber.from(quorumVal || "0")),
     governanceToken: tokenAddr || "(not found)",
     network,
   };
