@@ -199,7 +199,7 @@ async function getDelegatePowersMulticall(governorAddress, delegateAddresses, ne
       callData: govToken.interface.encodeFunctionData("getVotes", [addr]),
     }));
     // If available, use Multicall3; otherwise fallback to sequential
-    let outputs;
+    let outputs = [];
     try {
       const multicallAddr = "0xcA11bde05977b3631167028862bE2a173976CA11";
       const iMulticall = new ethers.utils.Interface([
