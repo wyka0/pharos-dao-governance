@@ -48,22 +48,20 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
     if (ev.toDelegate.toLowerCase() !== zeroAddr) allDelegates.add(ev.toDelegate);
   }
 
-  // Query voting power for each delegate
+  // Query voting power for each delegate via Multicall3
   const delegatePower = [];
   let totalVotingPowerBN = ethers.BigNumber.from(0);
-  for (const addr of allDelegates) {
-    try {
-      const powerBN = await govToken.getVotes(addr);
-      if (powerBN.gt(0)) {
-        totalVotingPowerBN = totalVotingPowerBN.add(powerBN);
-        delegatePower.push({
-          address: addr,
-          votingPower: powerBN,
-          votingPowerRaw: powerBN.toString(),
-          percentage: totalSupplyBN.gt(0) ? powerBN.mul(10000).div(totalSupplyBN).toNumber() / 100 : 0,
-        });
-      }
-    } catch (_) {}
+  const powers = await getDelegatePowersMulticall(governorAddress, Array.from(allDelegates), network);
+  for (const { address: addr, votingPower: powerBN } of powers) {
+    if (powerBN.gt(0)) {
+      totalVotingPowerBN = totalVotingPowerBN.add(powerBN);
+      delegatePower.push({
+        address: addr,
+        votingPower: powerBN,
+        votingPowerRaw: powerBN.toString(),
+        percentage: totalSupplyBN.gt(0) ? powerBN.mul(10000).div(totalSupplyBN).toNumber() / 100 : 0,
+      });
+    }
   }
 
   // Sort by voting power descending

@@ -25,7 +25,13 @@ async function preCheck(governorAddress, proposalId, voterAddress, network) {
     if (match) description = match.description;
   } catch (_) {}
 
-  return description;
+  // Run execution simulation and check quorum
+  const sim = await simulateProposal(governorAddress, proposalId, network);
+  if (!sim.quorumMet) {
+    console.warn(`⚠️ Quorum not met yet for Proposal #${proposalId}`);
+  }
+
+  return { stateCode, voted: false, description, simulation: sim };
 }
 
 async function castVote(governorAddress, proposalId, support, network = "atlantic-testnet", reason = "") {
@@ -98,8 +104,8 @@ if (require.main === module) {
       console.log(`For:     ${pharos.formatRawVotes(sim.forVotes)}  (${sim.forPct.toFixed(1)}%)`);
       console.log(`Against: ${pharos.formatRawVotes(sim.againstVotes)}  (${sim.againstPct.toFixed(1)}%)`);
       console.log(`Quorum:  ${sim.quorumMet ? "✅ Met" : "❌ Not met"}`);
-      return preCheck(addr, pid, voter, net).then((desc) => {
-        console.log(`\n🗳️  Proposal #${pid}: ${(desc || "?").slice(0, 100)}`);
+      return preCheck(addr, pid, voter, net).then(({ description }) => {
+        console.log(`\n🗳️  Proposal #${pid}: ${(description || "?").slice(0, 100)}`);
         console.log(`Voter: ${voter}`);
         console.log(`Vote:  ${VOTE_TYPES[support]}`);
         console.log(`Network: ${net}`);

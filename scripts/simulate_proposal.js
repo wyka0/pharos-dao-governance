@@ -32,6 +32,15 @@ async function simulateProposal(governorAddress, proposalId, network = "atlantic
   const quorum = await gov.quorum(Math.max(0, startBlock));
   const quorumMet = votes.forVotes.gte(quorum);
 
+  // Simulate execution — detect revert reasons before voting
+  let execution = { willSucceed: null, reason: null };
+  try {
+    await gov.callStatic.execute(proposalId);
+    execution = { willSucceed: true, reason: null };
+  } catch (err) {
+    execution = { willSucceed: false, reason: err.reason || err.message };
+  }
+
   return {
     proposalId: proposalId.toString(),
     state: stateNames[stateCode] || "Unknown",
@@ -49,6 +58,7 @@ async function simulateProposal(governorAddress, proposalId, network = "atlantic
     quorum: quorum.toString(),
     quorumMet,
     proposalThreshold: proposalThreshold.toString(),
+    execution,
     network,
     governor: governorAddress,
   };
@@ -83,5 +93,10 @@ if (require.main === module) {
     console.log(`  Required: ${pharos.formatRawVotes(d.quorum)}`);
     console.log(`  Met:      ${d.quorumMet ? "✅ Yes" : "❌ No"}`);
     console.log(`  Threshold: ${pharos.formatRawVotes(d.proposalThreshold)}`);
+    console.log(`\n⚡ Execution Simulation`);
+    console.log(`  Will Succeed: ${d.execution.willSucceed === null ? "N/A" : d.execution.willSucceed ? "✅ Yes" : "❌ No"}`);
+    if (d.execution.reason) {
+      console.log(`  Revert Reason: ${d.execution.reason}`);
+    }
   }).catch(console.error);
 }

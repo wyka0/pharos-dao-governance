@@ -1,3 +1,11 @@
+jest.mock("../../scripts/simulate_proposal", () => ({
+  simulateProposal: jest.fn(() => Promise.resolve({
+    state: "Active",
+    quorumMet: true,
+    execution: { willSucceed: true, reason: null },
+  })),
+}));
+
 jest.mock("../../scripts/pharos_rpc", () => {
   const mockGov = {
     state: jest.fn(),
@@ -30,7 +38,7 @@ describe("cast_vote", () => {
     jest.resetModules();
   });
 
-  test("preCheck returns description when proposal is Active", async () => {
+  test("preCheck returns object with description and simulation when Active", async () => {
     const mockGov = pharosMock.getGovernorContract();
     mockGov.state.mockResolvedValue(1);
     mockGov.hasVoted.mockResolvedValue(false);
@@ -42,7 +50,10 @@ describe("cast_vote", () => {
       "atlantic-testnet"
     );
 
-    expect(result).toBe("");
+    expect(result.description).toBe("");
+    expect(result.stateCode).toBe(1);
+    expect(result.voted).toBe(false);
+    expect(result.simulation).toBeDefined();
     expect(pharosMock.getGovernorContract).toHaveBeenCalledWith(
       "0x0000000000000000000000000000000000000001",
       "atlantic-testnet"

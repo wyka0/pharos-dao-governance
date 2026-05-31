@@ -124,7 +124,10 @@ async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
             logBlockNumber: log.blockNumber,
           });
         }
-      } catch (_) { break; }
+      } catch (err) {
+        console.warn(`[RPC Error] ProposalCreated forward scan aborted at block ${cursor}: ${err.message}`);
+        throw err;
+      }
       cursor = chunkEnd + 1;
       chunks++;
     }
@@ -152,7 +155,10 @@ async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
         }
         // Stop early if we found events in this latest chunk (assumes all proposals are recent)
         if (logs.length > 0) break;
-      } catch (_) { break; }
+      } catch (err) {
+        console.warn(`[RPC Error] ProposalCreated backward scan aborted at block ${startBlock}: ${err.message}`);
+        throw err;
+      }
       endBlock = startBlock - 1;
       chunks++;
     }
@@ -191,7 +197,10 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
             blockNumber: log.blockNumber,
           });
         }
-      } catch (_) { break; }
+      } catch (err) {
+        console.warn(`[RPC Error] DelegateChanged forward scan aborted at block ${cursor}: ${err.message}`);
+        throw err;
+      }
       cursor = chunkEnd + 1;
       chunks++;
     }
@@ -215,7 +224,10 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
           });
         }
         if (logs.length > 0) break;
-      } catch (_) { break; }
+      } catch (err) {
+        console.warn(`[RPC Error] DelegateChanged backward scan aborted at block ${startBlock}: ${err.message}`);
+        throw err;
+      }
       endBlock = startBlock - 1;
       chunks++;
     }
