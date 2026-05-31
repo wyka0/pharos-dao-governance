@@ -61,9 +61,6 @@ node scripts/delegate_votes.js $GOVERNOR_ADDRESS 0xYourAddress
 # Live results
 node scripts/get_results.js $GOVERNOR_ADDRESS 0
 
-# AI Governance Recommendation ⭐
-node scripts/governance_assessment.js $GOVERNOR_ADDRESS 0
-
 # DAO health report
 node scripts/governance_health.js $GOVERNOR_ADDRESS
 
@@ -72,9 +69,6 @@ node scripts/governance_activity.js $GOVERNOR_ADDRESS
 
 # Delegate concentration analysis 👑
 node scripts/delegate_insights.js $GOVERNOR_ADDRESS
-
-# AI Governance Assessment ⭐
-node scripts/governance_assessment.js $GOVERNOR_ADDRESS 0
 ```
 
 ## Sample Output
@@ -112,7 +106,7 @@ State: Active
 
 🎯 Quorum
   Required:      40,000,000 pDAO
-  Progress:            2500.0%  ✅ Met
+  Progress:            100.0%  ✅ Met
 
 🔮 AI Assessment: FOR  (confidence: High · 85/100)
 🚨 QUORUM ALERT — Proposal may fail if quorum not met soon!
@@ -239,9 +233,9 @@ forge script script/DeployDAO.s.sol --rpc-url atlantic-testnet --broadcast
 # → Governor address printed. Export as $GOV
 
 # 2. Create 2-3 proposals
-node scripts/create_proposal.js $GOV
-node scripts/create_proposal.js $GOV "Treasury Multi-Sig"
-node scripts/create_proposal.js $GOV "Reduce Proposal Threshold"
+node scripts/create_proposal.js $GOV $GOV 0 "" "First proposal"
+node scripts/create_proposal.js $GOV $GOV 0 "" "Treasury Multi-Sig"
+node scripts/create_proposal.js $GOV $GOV 0 "" "Reduce Proposal Threshold"
 
 # 3. List all proposals
 node scripts/get_proposals.js $GOV
@@ -255,7 +249,7 @@ node scripts/cast_vote.js $GOV 0 1 "Best path for the DAO" --dry-run
 node scripts/cast_vote.js $GOV 0 1 "Best path for the DAO"
 
 # 6. Results & quorum
-node scripts/get_results.js $GOV
+node scripts/get_results.js $GOV 0
 
 # 7. Generate all 5 analytics
 node scripts/governance_activity.js $GOV
@@ -266,7 +260,15 @@ node scripts/governance_assessment.js $GOV 0
 
 # 8. Or use npm shortcuts
 npm run proposals -- $GOV
+npm run details -- $GOV 0
+npm run power -- $GOV <voter>
+npm run vote -- $GOV 0 1 --dry-run
+npm run delegate -- $GOV <address>
+npm run results -- $GOV 0
 npm run health -- $GOV
+npm run activity -- $GOV
+npm run delegates -- $GOV
 npm run risk -- $GOV
 npm run assessment -- $GOV 0
+npm run create -- $GOV $GOV 0 "" "Proposal"
 ```
