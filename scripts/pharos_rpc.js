@@ -47,20 +47,25 @@ function assertValidAddress(address, label) {
   if (!address || !/^0x[a-fA-F0-9]{40}$/.test(address)) {
     throw new Error(`Invalid ${label}: "${address}". Expected a valid 0x-prefixed 40-hex-char address.`);
   }
+  try {
+    ethers.utils.getAddress(address);
+  } catch (_) {
+    throw new Error(`Invalid ${label}: bad checksum "${address}". Run it through ethers.utils.getAddress() to get the correct checksum.`);
+  }
 }
 
 function getGovernorContract(governorAddress, network) {
-  assertValidAddress(governorAddress, "governor address");
+  const checksummed = ethers.utils.getAddress(governorAddress);
   const abi = loadABI("governor_abi");
   const provider = getProvider(network);
-  return new ethers.Contract(governorAddress, abi, provider);
+  return new ethers.Contract(checksummed, abi, provider);
 }
 
 function getGovernanceTokenContract(tokenAddress, network) {
-  assertValidAddress(tokenAddress, "token address");
+  const checksummed = ethers.utils.getAddress(tokenAddress);
   const abi = loadABI("governance_token_abi");
   const provider = getProvider(network);
-  return new ethers.Contract(tokenAddress, abi, provider);
+  return new ethers.Contract(checksummed, abi, provider);
 }
 
 function getWallet(network) {
@@ -72,13 +77,13 @@ function getWallet(network) {
 function getSignerContract(governorAddress, network) {
   const abi = loadABI("governor_abi");
   const wallet = getWallet(network);
-  return new ethers.Contract(governorAddress, abi, wallet);
+  return new ethers.Contract(ethers.utils.getAddress(governorAddress), abi, wallet);
 }
 
 function getTokenSignerContract(tokenAddress, network) {
   const abi = loadABI("governance_token_abi");
   const wallet = getWallet(network);
-  return new ethers.Contract(tokenAddress, abi, wallet);
+  return new ethers.Contract(ethers.utils.getAddress(tokenAddress), abi, wallet);
 }
 
 function explorerUrl(txHash, network) {
