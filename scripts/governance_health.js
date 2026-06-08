@@ -19,12 +19,24 @@ async function governanceHealth(governorAddress, network = "atlantic-testnet") {
   } catch (err) { console.warn("proposalCount failed:", err.message); totalCount = 0; }
 
   if (totalCount > 0) {
-    for (let i = 0; i < totalCount; i++) {
-      try {
-        const p = await gov.proposals(i);
-        const s = await gov.state(i);
-        proposals.push({ id: i, state: s, forVotes: p.forVotes || ethers.BigNumber.from(0), againstVotes: p.againstVotes || ethers.BigNumber.from(0), startBlock: ethers.BigNumber.from(p.startBlock || 0) });
-      } catch (err) { console.warn("proposal fetch failed for id", i, ":", err.message); }
+    const CHUNK_SIZE = 20;
+    for (let chunkStart = 0; chunkStart < totalCount; chunkStart += CHUNK_SIZE) {
+      const chunkEnd = Math.min(totalCount, chunkStart + CHUNK_SIZE);
+      const results = await Promise.all(
+        Array.from({ length: chunkEnd - chunkStart }, (_, j) => {
+          const i = chunkStart + j;
+          return Promise.all([
+            Promise.resolve(i),
+            gov.proposals(i).catch((err) => { console.warn("proposal fetch failed for id", i, ":", err.message); return null; }),
+            gov.state(i).catch((err) => { console.warn("state failed for id", i, ":", err.message); return null; }),
+          ]).then(([id, p, s]) => {
+            if (!p || s === null) return null;
+            return { id, state: s, forVotes: p.forVotes || ethers.BigNumber.from(0), againstVotes: p.againstVotes || ethers.BigNumber.from(0), startBlock: ethers.BigNumber.from(p.startBlock || 0) };
+          });
+        })
+      );
+      for (const r of results) { if (r) proposals.push(r); }
+      if (chunkEnd < totalCount) await new Promise((r) => setTimeout(r, 150));
     }
   } else {
     // Fallback: events (OZ Governor)

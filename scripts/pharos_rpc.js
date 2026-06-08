@@ -91,18 +91,81 @@ function explorerAddress(address, network) {
   return `${cfg.explorerUrl}/address/${address}`;
 }
 
+const EVENT_SIG_PROPOSAL_CREATED_V4 = ethers.utils.id("ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)");
+const EVENT_SIG_PROPOSAL_CREATED_V5 = ethers.utils.id("ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,uint256,string)");
+
+function tryDecodeProposalCreated(log) {
+  const topic0 = log.topics[0];
+
+  try {
+    if (topic0 === EVENT_SIG_PROPOSAL_CREATED_V4 || topic0 === EVENT_SIG_PROPOSAL_CREATED_V5) {
+      const isV5 = topic0 === EVENT_SIG_PROPOSAL_CREATED_V5;
+      const proposalId = ethers.BigNumber.from(log.topics[1]).toString();
+      const proposer = ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[2], 32).slice(12));
+
+      const data = log.data === "0x" ? "0x" : log.data;
+      if (!data || data === "0x") {
+        return {
+          proposalId,
+          proposer,
+          voteStart: "0",
+          voteEnd: "0",
+          description: "",
+          calldatas: [],
+          logBlockNumber: log.blockNumber,
+        };
+      }
+
+      let voteStart, voteEnd, description, calldatas;
+
+      if (isV5) {
+        // OZ v5: (targets,values,signatures,calldatas,description,snapshot,duration)
+        // layout: [offset_target, offset_value, offset_sig, offset_calldata, offset_desc] + [targets, values, sigs, calldatas] + [snapshot, duration, desc]
+        const decoded = ethers.utils.defaultAbiCoder.decode(
+          ["uint256[]", "uint256[]", "string[]", "bytes[]", "uint256", "uint256", "string"],
+          ethers.utils.hexZeroPad(data, 320)
+        );
+        voteStart = decoded[4].toString();
+        voteEnd = (decoded[4].add(decoded[5])).toString();
+        description = decoded[6];
+        calldatas = decoded[3];
+      } else {
+        // OZ v4: (targets,values,signatures,calldatas,description,startBlock,endBlock)
+        const decoded = ethers.utils.defaultAbiCoder.decode(
+          ["uint256[]", "uint256[]", "string[]", "bytes[]", "uint256", "uint256", "string"],
+          ethers.utils.hexZeroPad(data, 320)
+        );
+        voteStart = decoded[5].toString();
+        voteEnd = decoded[6].toString();
+        description = decoded[4];
+        calldatas = decoded[3];
+      }
+
+      return {
+        proposalId,
+        proposer,
+        voteStart,
+        voteEnd,
+        description: description || "",
+        calldatas: calldatas || [],
+        logBlockNumber: log.blockNumber,
+      };
+    }
+  } catch (err) {
+    // Fall through to null return
+  }
+  return null;
+}
+
 async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
-  const eventTopic = ethers.utils.id("ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)");
   const provider = gov.provider || gov.signer?.provider;
   const currentBlock = await provider.getBlockNumber();
   const RANGE = 1000;
-  const MAX_CHUNKS_FWD = 250; // handles up to 250k blocks (~35 days)
-  const MAX_CHUNKS_BWD = 50;  // handles up to 50k blocks (~7 days)
-  const iface = new ethers.utils.Interface(loadABI("governor_abi"));
+  const MAX_CHUNKS_FWD = 250;
+  const MAX_CHUNKS_BWD = 50;
   const results = [];
 
   if (fromBlock !== undefined) {
-    // Forward from fromBlock to toBlock (or currentBlock)
     const endAt = _toBlock !== undefined ? _toBlock : currentBlock;
     let cursor = Math.max(0, fromBlock);
     let chunks = 0;
@@ -110,19 +173,14 @@ async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
       const chunkEnd = Math.min(endAt, cursor + RANGE);
       try {
         const logs = await withRetry(() => provider.getLogs({
-          address: gov.address, topics: [eventTopic],
-          fromBlock: cursor, toBlock: chunkEnd,
+          address: gov.address,
+          topics: [null],
+          fromBlock: cursor,
+          toBlock: chunkEnd,
         }));
         for (const log of logs) {
-          const parsed = iface.parseLog(log);
-          results.push({
-            proposalId: parsed.args.proposalId.toString(),
-            proposer: parsed.args.proposer,
-            voteStart: (parsed.args.voteStart || parsed.args.startBlock).toString(),
-            voteEnd: (parsed.args.voteEnd || parsed.args.endBlock).toString(),
-            description: parsed.args.description,
-            logBlockNumber: log.blockNumber,
-          });
+          const decoded = tryDecodeProposalCreated(log);
+          if (decoded) results.push(decoded);
         }
       } catch (err) {
         console.warn(`[RPC Error] ProposalCreated forward scan aborted at block ${cursor}: ${err.message}`);
@@ -132,28 +190,21 @@ async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
       chunks++;
     }
   } else {
-    // Backward from currentBlock, stop after finding events or hitting MAX_CHUNKS_BWD
     let endBlock = currentBlock;
     let chunks = 0;
     while (endBlock > 0 && chunks < MAX_CHUNKS_BWD) {
       const startBlock = Math.max(0, endBlock - RANGE + 1);
       try {
         const logs = await withRetry(() => provider.getLogs({
-          address: gov.address, topics: [eventTopic],
-          fromBlock: startBlock, toBlock: endBlock,
+          address: gov.address,
+          topics: [null],
+          fromBlock: startBlock,
+          toBlock: endBlock,
         }));
         for (const log of logs) {
-          const parsed = iface.parseLog(log);
-          results.push({
-            proposalId: parsed.args.proposalId.toString(),
-            proposer: parsed.args.proposer,
-            voteStart: (parsed.args.voteStart || parsed.args.startBlock).toString(),
-            voteEnd: (parsed.args.voteEnd || parsed.args.endBlock).toString(),
-            description: parsed.args.description,
-            logBlockNumber: log.blockNumber,
-          });
+          const decoded = tryDecodeProposalCreated(log);
+          if (decoded) results.push(decoded);
         }
-        // Stop early if we found events in this latest chunk (assumes all proposals are recent)
         if (logs.length > 0) break;
       } catch (err) {
         console.warn(`[RPC Error] ProposalCreated backward scan aborted at block ${startBlock}: ${err.message}`);
@@ -174,7 +225,6 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
   const RANGE = 1000;
   const MAX_CHUNKS_FWD = 250;
   const MAX_CHUNKS_BWD = 50;
-  const iface = new ethers.utils.Interface(loadABI("governance_token_abi"));
   const results = [];
 
   if (fromBlock !== undefined) {
@@ -189,11 +239,10 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
           fromBlock: cursor, toBlock: chunkEnd,
         }));
         for (const log of logs) {
-          const parsed = iface.parseLog(log);
           results.push({
-            delegator: parsed.args.delegator,
-            fromDelegate: parsed.args.fromDelegate,
-            toDelegate: parsed.args.toDelegate,
+            delegator: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[1], 32).slice(12)),
+            fromDelegate: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[2], 32).slice(12)),
+            toDelegate: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[3], 32).slice(12)),
             blockNumber: log.blockNumber,
           });
         }
@@ -215,11 +264,10 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
           fromBlock: startBlock, toBlock: endBlock,
         }));
         for (const log of logs) {
-          const parsed = iface.parseLog(log);
           results.push({
-            delegator: parsed.args.delegator,
-            fromDelegate: parsed.args.fromDelegate,
-            toDelegate: parsed.args.toDelegate,
+            delegator: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[1], 32).slice(12)),
+            fromDelegate: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[2], 32).slice(12)),
+            toDelegate: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[3], 32).slice(12)),
             blockNumber: log.blockNumber,
           });
         }

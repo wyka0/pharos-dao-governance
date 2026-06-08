@@ -37,9 +37,13 @@ async function createProposal(governorAddress, targets, values, calldatas, descr
 
   // Parse ProposalCreated event for the ID
   let proposalId = "unknown";
-  const eventSig = ethers.utils.id("ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)");
+  // OZ Governor v4/v5 share same topic[0] signature; try parsing, fall back to topic-based extraction
+  const OZ_EVENT_SIG = ethers.utils.id("ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)");
   for (const log of receipt.logs) {
-    if (log.address.toLowerCase() === governorAddress.toLowerCase()) {
+    if (log.address.toLowerCase() !== governorAddress.toLowerCase()) continue;
+    const topic0 = log.topics[0];
+    // OZ Governor v4/v5: proposalId is in topics[1]
+    if (topic0 === OZ_EVENT_SIG) {
       try {
         const iface = new ethers.utils.Interface(pharos.loadABI("governor_abi"));
         const parsed = iface.parseLog(log);
@@ -47,6 +51,14 @@ async function createProposal(governorAddress, targets, values, calldatas, descr
           proposalId = parsed.args.proposalId.toString();
           break;
         }
+      } catch (_) {}
+    }
+    // GovernorBravo: proposalId is in topics[1] too, but with different event sig
+    // Attempt to read proposalId directly from topic[1] as fallback
+    if (topic0 !== OZ_EVENT_SIG) {
+      try {
+        proposalId = ethers.BigNumber.from(log.topics[1]).toString();
+        break;
       } catch (_) {}
     }
   }

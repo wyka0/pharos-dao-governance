@@ -1,3 +1,4 @@
+const { ethers } = require("ethers");
 const pharos = require("./pharos_rpc");
 const { simulateProposal } = require("./simulate_proposal");
 

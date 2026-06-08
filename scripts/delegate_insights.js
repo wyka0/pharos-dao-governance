@@ -24,26 +24,10 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
 
   const govToken = pharos.getGovernanceTokenContract(tokenAddr, network);
 
-  // Query DelegateChanged events for the last 30 days + some buffer
-  const currentBlock = await provider.getBlockNumber();
-  const sinceBlock = Math.max(0, currentBlock - BLOCKS_30_DAYS * 3); // 90 day buffer for coverage
-  const events = await pharos.queryDelegateChangedEvents(tokenAddr, network, sinceBlock);
-
-  // Extract unique active delegates (addresses currently receiving delegation)
-  const delegateSet = new Set();
-  const zeroAddr = ethers.constants.AddressZero.toLowerCase();
-
-  for (const ev of events) {
-    const to = ev.toDelegate.toLowerCase();
-    const from = ev.fromDelegate.toLowerCase();
-    if (to !== zeroAddr) delegateSet.add(ev.toDelegate);
-    if (from !== zeroAddr) delegateSet.delete(ev.fromDelegate); // no longer a delegate
-    // Re-add if someone is still delegating to them (handled by checking all events)
-  }
-
-  // Also scan more broadly: check events in the full history
+  // Query DelegateChanged events for the full history to get current delegates
   const allEvents = await pharos.queryDelegateChangedEvents(tokenAddr, network);
   const allDelegates = new Set();
+  const zeroAddr = ethers.constants.AddressZero.toLowerCase();
   for (const ev of allEvents) {
     if (ev.toDelegate.toLowerCase() !== zeroAddr) allDelegates.add(ev.toDelegate);
   }
@@ -103,13 +87,18 @@ async function delegateInsights(governorAddress, network = "atlantic-testnet") {
   }
 
   // Herfindahl-Hirschman Index approximation (sum of squared shares)
-  const totalVPct = delegatePower.reduce((s, d) => s + d.percentage, 0);
-  const hhi = delegatePower.reduce((s, d) => s + Math.pow(d.percentage / totalVPct, 2), 0);
   let normalizedHhi = 0;
-  if (delegatePower.length > 1) {
-    normalizedHhi = ((hhi - 1 / delegatePower.length) / (1 - 1 / delegatePower.length)) * 100;
+  if (delegatePower.length === 0) {
+    normalizedHhi = 0;
   } else if (delegatePower.length === 1) {
     normalizedHhi = 100;
+  } else {
+    const totalVPct = delegatePower.reduce((s, d) => s + d.percentage, 0);
+    if (totalVPct > 0) {
+      const hhi = delegatePower.reduce((s, d) => s + Math.pow(d.percentage / totalVPct, 2), 0);
+      normalizedHhi = ((hhi - 1 / delegatePower.length) / (1 - 1 / delegatePower.length)) * 100;
+      if (!Number.isFinite(normalizedHhi)) normalizedHhi = 0;
+    }
   }
 
   return {
