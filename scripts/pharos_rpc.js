@@ -203,9 +203,9 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
         }));
         for (const log of logs) {
           results.push({
-            delegator: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[1], 32).slice(12)),
-            fromDelegate: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[2], 32).slice(12)),
-            toDelegate: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[3], 32).slice(12)),
+            delegator: ethers.utils.getAddress('0x' + log.topics[1].slice(-40)),
+            fromDelegate: ethers.utils.getAddress('0x' + log.topics[2].slice(-40)),
+            toDelegate: ethers.utils.getAddress('0x' + log.topics[3].slice(-40)),
             blockNumber: log.blockNumber,
           });
         }
@@ -228,9 +228,9 @@ async function queryDelegateChangedEvents(tokenAddress, network, fromBlock, _toB
         }));
         for (const log of logs) {
           results.push({
-            delegator: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[1], 32).slice(12)),
-            fromDelegate: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[2], 32).slice(12)),
-            toDelegate: ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[3], 32).slice(12)),
+            delegator: ethers.utils.getAddress('0x' + log.topics[1].slice(-40)),
+            fromDelegate: ethers.utils.getAddress('0x' + log.topics[2].slice(-40)),
+            toDelegate: ethers.utils.getAddress('0x' + log.topics[3].slice(-40)),
             blockNumber: log.blockNumber,
           });
         }
