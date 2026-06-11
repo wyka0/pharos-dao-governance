@@ -211,14 +211,14 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
       reasoning.push(`⚡ Risk factor flagged: ${category}. Higher scrutiny may be warranted.`);
     }
 
-    const marginDisplay = pharos.formatRawVotes(marginBN.abs().toString(), tokenSymbol);
-    if (marginBN.gt(0) && quorumMet) {
-      reasoning.push(`✅ Quorum met. For votes lead by ${marginDisplay}.`);
-    } else if (marginBN.gt(0)) {
-      reasoning.push(`📊 For votes lead by ${marginDisplay}, but quorum not yet met at ${quorumProb.toFixed(0)}%.`);
-    } else if (fVotesBN.gt(0)) {
-      reasoning.push(`Against votes lead by ${marginDisplay}.`);
-    }
+  const marginDisplay = pharos.formatRawVotes(marginBN.gte(0) ? marginBN.toString() : marginBN.mul(-1).toString(), tokenSymbol);
+  if (marginBN.gt(0) && quorumMet) {
+    reasoning.push(`✅ Quorum met. For votes lead by ${marginDisplay}.`);
+  } else if (marginBN.gt(0)) {
+    reasoning.push(`📊 For votes lead by ${marginDisplay}, but quorum not yet met at ${quorumProb.toFixed(0)}%.`);
+  } else if (fVotesBN.gt(0)) {
+    reasoning.push(`Against votes lead by ${marginDisplay}.`);
+  }
 
     if (blocksRemaining > 0 && isActive) {
       reasoning.push(`⏳ ${blocksRemaining.toLocaleString()} blocks remain in voting window.`);
@@ -249,7 +249,7 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
       abstainVotes: votes.abstainVotes.toString(),
       totalVotes: votes.forVotes.add(votes.againstVotes).add(votes.abstainVotes).toString(),
       forPercentage: forPct.toFixed(1),
-      margin: votes.forVotes.sub(votes.againstVotes).abs().toString(),
+      margin: votes.forVotes.gt(votes.againstVotes) ? votes.forVotes.sub(votes.againstVotes).toString() : votes.againstVotes.sub(votes.forVotes).toString(),
       quorum: quorumRaw,
       quorumProgress: quorumProb.toFixed(0),
       quorumMet,

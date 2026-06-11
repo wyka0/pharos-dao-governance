@@ -22,7 +22,7 @@ async function createProposal(governorAddress, targets, values, calldatas, descr
     }
   } catch (_) {}
 
-  if (Number(power) < Number(threshold)) {
+  if (ethers.BigNumber.from(power).lt(ethers.BigNumber.from(threshold))) {
     return {
       skipped: true,
       message: `Insufficient voting power. Have ${pharos.formatRawVotes(power)}, need ${pharos.formatRawVotes(threshold)}`,

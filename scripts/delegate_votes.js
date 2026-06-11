@@ -20,7 +20,7 @@ async function delegateVotes(governorAddress, delegateAddress, network = "atlant
   }
 
   const token = pharos.getGovernanceTokenContract(tokenAddr, network);
-  const wallet = pharos.getWallet(net);
+  const wallet = pharos.getWallet(network);
   const voterAddress = wallet.address;
   const tokenSigner = token.connect(wallet);
 

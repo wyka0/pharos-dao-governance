@@ -96,70 +96,28 @@ function explorerAddress(address, network) {
   return `${cfg.explorerUrl}/address/${address}`;
 }
 
-const EVENT_SIG_PROPOSAL_CREATED_V4 = ethers.utils.id("ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)");
-const EVENT_SIG_PROPOSAL_CREATED_V5 = ethers.utils.id("ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,uint256,string)");
+const EVENT_SIG_PROPOSAL_CREATED = ethers.utils.id("ProposalCreated(uint256,address,address[],uint256[],string[],bytes[],uint256,uint256,string)");
 
 function tryDecodeProposalCreated(log) {
-  const topic0 = log.topics[0];
+  if (log.topics[0] !== EVENT_SIG_PROPOSAL_CREATED) return null;
 
   try {
-    if (topic0 === EVENT_SIG_PROPOSAL_CREATED_V4 || topic0 === EVENT_SIG_PROPOSAL_CREATED_V5) {
-      const isV5 = topic0 === EVENT_SIG_PROPOSAL_CREATED_V5;
-      const proposalId = ethers.BigNumber.from(log.topics[1]).toString();
-      const proposer = ethers.utils.getAddress(ethers.utils.hexZeroPad(log.topics[2], 32).slice(12));
-
-      const data = log.data === "0x" ? "0x" : log.data;
-      if (!data || data === "0x") {
-        return {
-          proposalId,
-          proposer,
-          voteStart: "0",
-          voteEnd: "0",
-          description: "",
-          calldatas: [],
-          logBlockNumber: log.blockNumber,
-        };
-      }
-
-      let voteStart, voteEnd, description, calldatas;
-
-      if (isV5) {
-        // OZ v5: (targets,values,signatures,calldatas,description,snapshot,duration)
-        // layout: [offset_target, offset_value, offset_sig, offset_calldata, offset_desc] + [targets, values, sigs, calldatas] + [snapshot, duration, desc]
-        const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["uint256[]", "uint256[]", "string[]", "bytes[]", "uint256", "uint256", "string"],
-          ethers.utils.hexZeroPad(data, 320)
-        );
-        voteStart = decoded[4].toString();
-        voteEnd = (decoded[4].add(decoded[5])).toString();
-        description = decoded[6];
-        calldatas = decoded[3];
-      } else {
-        // OZ v4: (targets,values,signatures,calldatas,description,startBlock,endBlock)
-        const decoded = ethers.utils.defaultAbiCoder.decode(
-          ["uint256[]", "uint256[]", "string[]", "bytes[]", "uint256", "uint256", "string"],
-          ethers.utils.hexZeroPad(data, 320)
-        );
-        voteStart = decoded[5].toString();
-        voteEnd = decoded[6].toString();
-        description = decoded[4];
-        calldatas = decoded[3];
-      }
-
-      return {
-        proposalId,
-        proposer,
-        voteStart,
-        voteEnd,
-        description: description || "",
-        calldatas: calldatas || [],
-        logBlockNumber: log.blockNumber,
-      };
-    }
-  } catch (err) {
-    // Fall through to null return
+    const iface = new ethers.utils.Interface(loadABI("governor_abi"));
+    const parsed = iface.parseLog(log);
+    if (parsed.name !== "ProposalCreated") return null;
+    const a = parsed.args;
+    return {
+      proposalId: a.proposalId.toString(),
+      proposer: a.proposer,
+      voteStart: a.voteStart.toString(),
+      voteEnd: a.voteEnd.toString(),
+      description: a.description || "",
+      calldatas: a.calldatas || [],
+      logBlockNumber: log.blockNumber,
+    };
+  } catch (_) {
+    return null;
   }
-  return null;
 }
 
 async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
@@ -179,7 +137,7 @@ async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
       try {
         const logs = await withRetry(() => provider.getLogs({
           address: gov.address,
-          topics: [null],
+          topics: [EVENT_SIG_PROPOSAL_CREATED],
           fromBlock: cursor,
           toBlock: chunkEnd,
         }));
@@ -202,7 +160,7 @@ async function queryProposalCreatedEvents(gov, fromBlock, _toBlock) {
       try {
         const logs = await withRetry(() => provider.getLogs({
           address: gov.address,
-          topics: [null],
+          topics: [EVENT_SIG_PROPOSAL_CREATED],
           fromBlock: startBlock,
           toBlock: endBlock,
         }));

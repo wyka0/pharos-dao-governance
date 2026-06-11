@@ -195,7 +195,7 @@ async function getDelegatePowersMulticall(governorAddress, delegateAddresses, ne
     // If available, use Multicall3; otherwise fallback to sequential
     let outputs = [];
     try {
-      const multicallAddr = "0xcA11bde05977b3631167028862bE2a173976CA11";
+      const multicallAddr = process.env.MULTICALL3_ADDRESS || "0xcA11bde05977b3631167028862bE2a173976CA11";
       const iMulticall = new ethers.utils.Interface([
         "function aggregate(tuple(address target, bytes callData)[] calls) view returns (uint256 blockNumber, bytes[] returnData)",
       ]);
