@@ -6,30 +6,19 @@ import "../contracts/src/PharosGovernor.sol";
 
 contract PharosGovernorTest is Test {
     GovernanceToken token;
-    TimelockController timelock;
     PharosGovernor governor;
 
     function setUp() public {
         token = new GovernanceToken();
 
-        address[] memory proposers = new address[](0);
-        address[] memory executors = new address[](0);
-        timelock = new TimelockController(0, proposers, executors, address(this));
-
         governor = new PharosGovernor(
             IVotes(address(token)),
-            timelock,
             "PharosGovernor",
             1,           // votingDelay
             7200,        // votingPeriod
             100_000e18,  // proposalThreshold
             40_000_000e18 // quorum
         );
-
-        timelock.grantRole(timelock.PROPOSER_ROLE(), address(governor));
-        timelock.grantRole(timelock.EXECUTOR_ROLE(), address(governor));
-        timelock.grantRole(timelock.CANCELLER_ROLE(), address(governor));
-        timelock.revokeRole(timelock.DEFAULT_ADMIN_ROLE(), address(this));
     }
 
     function test_tokenMinted() public view {
@@ -138,13 +127,5 @@ contract PharosGovernorTest is Test {
 
     function test_governorVersion() public view {
         assertEq(governor.version(), "1");
-    }
-
-    function test_timelockAddress() public view {
-        assertEq(governor.timelock(), address(timelock));
-    }
-
-    function test_proposalNeedsQueuing() public view {
-        assertTrue(governor.proposalNeedsQueuing(0));
     }
 }
