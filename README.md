@@ -139,19 +139,28 @@ forge install foundry-rs/forge-std --no-git
 
 export PRIVATE_KEY=0x...
 
-# Deploy: GovernanceToken → TimelockController → PharosGovernor
-forge script script/DeployDAO.s.sol --rpc-url atlantic-testnet --broadcast --verify
+# Deploy: GovernanceToken → PharosGovernor
+forge script script/DeployDAO.s.sol --rpc-url atlantic-testnet --broadcast
 ```
 
 Output:
 ```
 === DAO Deployment Complete ===
 Token:      0x...
-Timelock:   0x...
 Governor:   0x...    ← set as GOVERNOR_ADDRESS
 ```
 
 Then create a proposal and test every script against it.
+
+### ⚠️ Contract Size Limit (Atlantic Testnet)
+
+The Pharos Atlantic chain enforces the standard 24KB EIP-170 contract size limit.
+If deployment fails with `contract code size exceeds 24576 bytes`:
+
+- **Option A:** Increase `optimizer_runs` in `contracts/foundry.toml` (e.g. `100000`) to reduce bytecode via aggressive optimization.
+- **Option B:** Use the simplified Governor at `contracts/src/PharosGovernor.sol` (no `GovernorTimelockControl`), which is already the default in the repo.
+
+The timelock-free Governor is ~23.5KB, fitting comfortably under the limit.
 
 ## Governor Compatibility
 
