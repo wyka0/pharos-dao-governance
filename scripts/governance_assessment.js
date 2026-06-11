@@ -101,10 +101,10 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
 
   const votes = await gov.proposalVotes(proposalId);
 
-  let startBlock = 0, deadlineBlock = 0, description = "";
+  let startBlock = 0, deadlineBlock = 0, description = "", match;
   try {
     const events = await pharos.queryProposalCreatedEvents(gov);
-    const match = events.find((e) => e.proposalId === String(proposalId));
+    match = events.find((e) => e.proposalId === String(proposalId));
     if (match) {
       description = match.description;
       startBlock = Number(match.voteStart);
@@ -120,7 +120,7 @@ async function governanceRecommendation(governorAddress, proposalId, network = "
 
   let quorumBN = ethers.BigNumber.from(0), quorumRaw = "0";
   try { quorumBN = await gov.quorum(startBlock || 0); quorumRaw = quorumBN.toString(); } catch (_) {}
-  const quorumVal = quorumBN.toNumber();
+  const quorumVal = quorumBN.toString();
 
   let tokenAddr, tokenSymbol = "VOTE", totalSupplyBN = ethers.BigNumber.from(0);
   try {
@@ -341,8 +341,6 @@ async function quorumAlertCheck(governorAddress, network = "atlantic-testnet") {
       const votes = await gov.proposalVotes(ev.proposalId);
       const deadlineBlock = Number(ev.voteEnd);
       const quorumBN = await gov.quorum(Number(ev.voteStart) || 0);
-      const quorumVal = quorumBN.toNumber();
-      const forVotes = votes.forVotes.toNumber();
       const blocksLeft = deadlineBlock - currentBlock;
 
       if (quorumBN.eq(0)) continue;
